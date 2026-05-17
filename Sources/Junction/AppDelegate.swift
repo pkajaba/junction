@@ -10,7 +10,7 @@ import AppKit
 ///    (especially older or scripted ones). We register for it as a belt-and-
 ///    suspenders measure so no URL is dropped.
 ///
-/// Both paths funnel into `URLLog.shared` so the SwiftUI view can observe.
+/// Both paths funnel through `URLLog.shared.append` and then `Router.shared.route`.
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -32,7 +32,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
             Task { @MainActor in
-                URLLog.shared.append(url, source: .openURLs)
+                let id = URLLog.shared.append(url, source: .openURLs)
+                Router.shared.route(url, entryID: id)
             }
         }
     }
@@ -40,7 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Legacy Apple Event API
 
     /// Receives the `kAEGetURL` Apple Event. Extracts the URL string from the
-    /// direct-object parameter and forwards it to the log.
+    /// direct-object parameter and forwards it to the log + router.
     @objc func handleGetURLEvent(
         _ event: NSAppleEventDescriptor,
         withReplyEvent replyEvent: NSAppleEventDescriptor
@@ -51,7 +52,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         else { return }
 
         Task { @MainActor in
-            URLLog.shared.append(url, source: .appleEvent)
+            let id = URLLog.shared.append(url, source: .appleEvent)
+            Router.shared.route(url, entryID: id)
         }
     }
 }

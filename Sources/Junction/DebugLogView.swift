@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// The single window shown by Junction at M1.
+/// The single window shown by Junction at M1/M2.
 ///
-/// Shows every URL we've received, newest first, with the time and which
-/// code path delivered it. Empty state tells the user how to get URLs to
-/// appear (set Junction as default browser, click a link).
+/// Shows every URL we've received, newest first, with the time, which code
+/// path delivered it, and (at M2) the routing outcome. Empty state tells
+/// the user how to get URLs to appear.
 struct DebugLogView: View {
     @EnvironmentObject private var log: URLLog
 
@@ -23,7 +23,7 @@ struct DebugLogView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Received URLs")
                     .font(.headline)
-                Text("Junction logs every link macOS hands it.")
+                Text("M2: every link is routed to Safari.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -58,7 +58,7 @@ struct DebugLogView: View {
                 .font(.title3.weight(.semibold))
             VStack(spacing: 4) {
                 Text("Set Junction as your default browser, then click a link anywhere.")
-                Text("It'll appear here.")
+                Text("Junction logs it here and opens it in Safari.")
             }
             .font(.callout)
             .foregroundStyle(.secondary)
@@ -82,38 +82,67 @@ private struct EntryRow: View {
     let entry: URLLog.Entry
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(entry.url.absoluteString)
                 .font(.system(.body, design: .monospaced))
                 .textSelection(.enabled)
                 .lineLimit(2)
                 .truncationMode(.middle)
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Label(entry.source.rawValue, systemImage: "arrow.down.right")
-                    .labelStyle(.titleAndIcon)
-                Text("•")
+                separator
                 Text(entry.receivedAt.formatted(date: .omitted, time: .standard))
+                separator
+                routingBadge
             }
             .font(.caption)
             .foregroundStyle(.secondary)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
+    }
+
+    private var separator: some View {
+        Text("•").foregroundStyle(.tertiary)
+    }
+
+    @ViewBuilder
+    private var routingBadge: some View {
+        switch entry.routing {
+        case .pending:
+            Label("routing…", systemImage: "ellipsis.circle")
+        case .routed(let target):
+            Label("→ \(target)", systemImage: "arrow.right.circle.fill")
+                .foregroundStyle(.green)
+        case .failed(let reason):
+            Label("failed: \(reason)", systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+        case .unsupported:
+            Label("unsupported scheme", systemImage: "xmark.circle")
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
-// MARK: - Preview
+// MARK: - Previews
 
 #Preview("With entries") {
     let log = URLLog.shared
-    log.append(URL(string: "https://github.com/pkajaba/junction")!, source: .openURLs)
-    log.append(URL(string: "https://news.ycombinator.com/item?id=123456")!, source: .appleEvent)
+    log.clear()
+    let id1 = log.append(URL(string: "https://github.com/pkajaba/junction")!, source: .openURLs)
+    let id2 = log.append(URL(string: "https://news.ycombinator.com/item?id=123456")!, source: .appleEvent)
+    let id3 = log.append(URL(string: "https://example.com/failing")!, source: .openURLs)
+    let id4 = log.append(URL(string: "mailto:hello@example.com")!, source: .openURLs)
+    log.updateRouting(for: id1, to: .routed(to: "Safari"))
+    log.updateRouting(for: id2, to: .pending)
+    log.updateRouting(for: id3, to: .failed(reason: "Safari not installed"))
+    log.updateRouting(for: id4, to: .unsupported)
     return DebugLogView()
         .environmentObject(log)
-        .frame(width: 560, height: 360)
+        .frame(width: 620, height: 360)
 }
 
 #Preview("Empty") {
     DebugLogView()
         .environmentObject(URLLog.shared)
-        .frame(width: 560, height: 360)
+        .frame(width: 620, height: 360)
 }
