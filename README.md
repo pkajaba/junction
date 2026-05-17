@@ -56,16 +56,25 @@ See [SPEC.md](./SPEC.md) for the architectural design.
 
 ## Building from source
 
-> Not yet — wait for M1.
+Currently at M1 (debug scaffold — no routing yet).
 
-When the Xcode project exists:
+**Requirements:**
+
+- macOS 13 Ventura or newer (deployment target; Junction itself develops on macOS 26)
+- Xcode 15 or newer
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen) — `brew install xcodegen`
+
+**Build & run:**
 
 ```bash
 git clone https://github.com/pkajaba/junction.git
 cd junction
+xcodegen generate          # writes Junction.xcodeproj from project.yml
 open Junction.xcodeproj
-# build & run with ⌘R
+# then ⌘R in Xcode
 ```
+
+`Junction.xcodeproj` is generated from `project.yml` and **not** committed — that avoids the merge-conflict pain that plagues most Xcode projects. Run `xcodegen generate` whenever `project.yml` or the source tree changes.
 
 ## Contributing
 

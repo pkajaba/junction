@@ -1,0 +1,57 @@
+import AppKit
+
+/// Application-level URL receiver.
+///
+/// macOS delivers URLs to the default browser via two paths:
+///
+/// 1. `NSApplicationDelegate.application(_:open:)` — modern API, called with
+///    an array of URLs at launch and while running.
+/// 2. `kAEGetURL` Apple Event — the older mechanism, still used by some apps
+///    (especially older or scripted ones). We register for it as a belt-and-
+///    suspenders measure so no URL is dropped.
+///
+/// Both paths funnel into `URLLog.shared` so the SwiftUI view can observe.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Register for the legacy GetURL Apple Event in addition to the
+        // modern openURLs delegate method.
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleGetURLEvent(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
+    }
+
+    // MARK: - Modern API
+
+    /// Called by AppKit when one or more URLs are handed to us — for example
+    /// when the user clicks a link in another app and Junction is the
+    /// registered default browser.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            Task { @MainActor in
+                URLLog.shared.append(url, source: .openURLs)
+            }
+        }
+    }
+
+    // MARK: - Legacy Apple Event API
+
+    /// Receives the `kAEGetURL` Apple Event. Extracts the URL string from the
+    /// direct-object parameter and forwards it to the log.
+    @objc func handleGetURLEvent(
+        _ event: NSAppleEventDescriptor,
+        withReplyEvent replyEvent: NSAppleEventDescriptor
+    ) {
+        guard
+            let urlString = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
+            let url = URL(string: urlString)
+        else { return }
+
+        Task { @MainActor in
+            URLLog.shared.append(url, source: .appleEvent)
+        }
+    }
+}

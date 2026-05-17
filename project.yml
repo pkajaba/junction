@@ -1,0 +1,71 @@
+name: Junction
+options:
+  bundleIdPrefix: com.pkajaba
+  deploymentTarget:
+    macOS: "13.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "0.1.0-alpha"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_HARDENED_RUNTIME: YES
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_IDENTITY: "-"           # ad-hoc for local dev; replace with Developer ID for release
+    DEVELOPMENT_TEAM: ""              # set locally; not committed
+    GENERATE_INFOPLIST_FILE: NO       # we use a custom one (see targets.Junction.info)
+    DEAD_CODE_STRIPPING: YES
+    GCC_TREAT_WARNINGS_AS_ERRORS: YES
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: NO  # too noisy at pre-v0.1; revisit at M5
+  configs:
+    Debug:
+      SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+    Release:
+      SWIFT_OPTIMIZATION_LEVEL: "-O"
+
+targets:
+  Junction:
+    type: application
+    platform: macOS
+    deploymentTarget: "13.0"
+    sources:
+      - path: Sources/Junction
+        type: group
+    info:
+      path: Sources/Junction/Info.plist
+      properties:
+        CFBundleName: Junction
+        CFBundleDisplayName: Junction
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSHumanReadableCopyright: "Copyright © 2026 Pavel Kajaba. MIT license."
+        LSApplicationCategoryType: public.app-category.utilities
+        # Register as a handler for http and https URL schemes — this is what
+        # lets macOS route link clicks to Junction once you set it as default.
+        CFBundleURLTypes:
+          - CFBundleURLName: Web URL (HTTP)
+            CFBundleURLSchemes: [http, https]
+            LSHandlerRank: Default
+        # Optional but conventional: declare we handle the GetURL Apple Event.
+        NSAppleEventsUsageDescription: "Junction receives URL events when it is your default browser."
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pkajaba.junction
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_PREVIEWS: YES
+
+schemes:
+  Junction:
+    build:
+      targets:
+        Junction: all
+    run:
+      config: Debug
+    archive:
+      config: Release
