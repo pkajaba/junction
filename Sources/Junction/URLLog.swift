@@ -25,6 +25,7 @@ final class URLLog: ObservableObject {
         case routed(to: String)
         case failed(reason: String)
         case unsupported
+        case cancelled
     }
 
     struct Entry: Identifiable, Equatable {

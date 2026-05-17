@@ -2,7 +2,7 @@ name: Junction
 options:
   bundleIdPrefix: com.pkajaba
   deploymentTarget:
-    macOS: "13.0"
+    macOS: "14.0"
   developmentLanguage: en
   createIntermediateGroups: true
   generateEmptyDirectories: true
@@ -32,7 +32,7 @@ targets:
   Junction:
     type: application
     platform: macOS
-    deploymentTarget: "13.0"
+    deploymentTarget: "14.0"
     sources:
       - path: Sources/Junction
         type: group

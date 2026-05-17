@@ -23,7 +23,7 @@ struct DebugLogView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Received URLs")
                     .font(.headline)
-                Text("M2: every link is routed to Safari.")
+                Text("M3: every link shows a browser picker.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -58,7 +58,7 @@ struct DebugLogView: View {
                 .font(.title3.weight(.semibold))
             VStack(spacing: 4) {
                 Text("Set Junction as your default browser, then click a link anywhere.")
-                Text("Junction logs it here and opens it in Safari.")
+                Text("Junction logs it here and pops up a browser picker.")
             }
             .font(.callout)
             .foregroundStyle(.secondary)
@@ -119,6 +119,9 @@ private struct EntryRow: View {
         case .unsupported:
             Label("unsupported scheme", systemImage: "xmark.circle")
                 .foregroundStyle(.secondary)
+        case .cancelled:
+            Label("cancelled", systemImage: "hand.raised.fill")
+                .foregroundStyle(.secondary)
         }
     }
 }
@@ -132,10 +135,12 @@ private struct EntryRow: View {
     let id2 = log.append(URL(string: "https://news.ycombinator.com/item?id=123456")!, source: .appleEvent)
     let id3 = log.append(URL(string: "https://example.com/failing")!, source: .openURLs)
     let id4 = log.append(URL(string: "mailto:hello@example.com")!, source: .openURLs)
+    let id5 = log.append(URL(string: "https://example.com/cancelled")!, source: .openURLs)
     log.updateRouting(for: id1, to: .routed(to: "Safari"))
     log.updateRouting(for: id2, to: .pending)
     log.updateRouting(for: id3, to: .failed(reason: "Safari not installed"))
     log.updateRouting(for: id4, to: .unsupported)
+    log.updateRouting(for: id5, to: .cancelled)
     return DebugLogView()
         .environmentObject(log)
         .frame(width: 620, height: 360)
