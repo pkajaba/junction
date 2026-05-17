@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question / discussion
+    url: https://github.com/pkajaba/junction/discussions
+    about: For questions, ideas, and general discussion — please use Discussions instead of opening an issue.
+  - name: Read the design first
+    url: https://github.com/pkajaba/junction/blob/main/SPEC.md
+    about: Many design questions are already answered in SPEC.md. Worth a quick read before filing.

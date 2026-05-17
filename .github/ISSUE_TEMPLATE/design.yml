@@ -1,0 +1,46 @@
+name: Design discussion
+description: Push back on an architectural decision or propose a different approach.
+title: "[design] "
+labels: ["design"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Pre-v0.1, design feedback is the most valuable contribution. Cheaper to argue about a decision before the code exists.
+
+  - type: input
+    id: section
+    attributes:
+      label: SPEC.md section
+      description: Which part of [SPEC.md](https://github.com/pkajaba/junction/blob/main/SPEC.md) does this relate to?
+      placeholder: "Picker window / Profile detection / Data model / ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: Current approach (as you understand it)
+      description: Summarize so we know we're talking about the same thing.
+    validations:
+      required: true
+
+  - type: textarea
+    id: concern
+    attributes:
+      label: The concern
+      description: What's wrong, missing, or risky?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternative
+    attributes:
+      label: Alternative proposal
+      description: What would you do instead, and what does it trade off?
+
+  - type: textarea
+    id: prior-art
+    attributes:
+      label: Prior art
+      description: Links to how Browserosaurus / Velja / Finicky / Choosy / something else handles this.

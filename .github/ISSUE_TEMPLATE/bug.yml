@@ -1,0 +1,81 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly.
+title: "[bug] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a clear report. Junction is pre-v0.1, so expect breakage — but a precise reproduction makes it 10× easier to fix.
+
+  - type: input
+    id: version
+    attributes:
+      label: Junction version
+      description: From the Junction menu → About, or `git rev-parse HEAD` if built from source.
+      placeholder: "v0.1.0 (or commit 9732717)"
+    validations:
+      required: true
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      description: Apple menu → About This Mac.
+      placeholder: "macOS 26.0 (Sequoia)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: arch
+    attributes:
+      label: Architecture
+      options:
+        - Apple Silicon (M1 / M2 / M3 / M4 / M5)
+        - Intel
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered list. Include the URL that triggered it if relevant.
+      placeholder: |
+        1. Click a link to https://...
+        2. Picker appears
+        3. Press Enter
+        4. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Console output, screenshots, or screen recordings. Drag-and-drop into this field.
+      render: shell
+
+  - type: checkboxes
+    id: searched
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I searched existing issues and didn't find a duplicate.
+          required: true
+        - label: I'm on the latest released version (or built from `main`).
+          required: true

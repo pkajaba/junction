@@ -1,0 +1,48 @@
+name: Browser support request
+description: Request first-class support for a browser not yet in the known-bundle-IDs table.
+title: "[browser] Support for "
+labels: ["browser-support"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Junction auto-detects any app registered as an `http://` handler, so a missing browser may still appear in the picker. This template is for first-class support: known bundle ID, profile detection, icon handling, command-line flags.
+
+  - type: input
+    id: name
+    attributes:
+      label: Browser name
+      placeholder: "Zen Browser"
+    validations:
+      required: true
+
+  - type: input
+    id: bundle-id
+    attributes:
+      label: Bundle ID
+      description: Run `mdls -name kMDItemCFBundleIdentifier "/Applications/<Browser>.app"` to find it.
+      placeholder: "app.zen-browser.zen"
+    validations:
+      required: true
+
+  - type: input
+    id: profile-path
+    attributes:
+      label: Profile storage path
+      description: Where on disk does this browser store its profiles?
+      placeholder: "~/Library/Application Support/zen/Profiles"
+
+  - type: textarea
+    id: cli
+    attributes:
+      label: Command-line flags
+      description: How do you open a specific profile / window from the command line?
+      render: shell
+      placeholder: |
+        open -na "Zen" --args --profile <profileName> <url>
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Quirks, multi-account behavior, version differences, etc.
