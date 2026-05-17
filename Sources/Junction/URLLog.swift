@@ -17,12 +17,19 @@ final class URLLog: ObservableObject {
         case appleEvent  = "AppleEvent"   // kAEGetURL handler
     }
 
+    /// Why a URL ended up where it did. Helps debug "why did this go to
+    /// Chrome silently?" — was it a rule match or did I click in the picker?
+    enum RouteReason: Equatable {
+        case picker
+        case rule(name: String)
+    }
+
     /// Outcome of attempting to route a received URL to a browser.
     /// Each entry starts `.pending`; the `Router` updates it asynchronously
-    /// once the open call resolves.
+    /// once the open call resolves (or the user dismisses the picker).
     enum Routing: Equatable {
         case pending
-        case routed(to: String)
+        case routed(to: String, via: RouteReason)
         case failed(reason: String)
         case unsupported
         case cancelled

@@ -22,6 +22,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             forEventClass: AEEventClass(kInternetEventClass),
             andEventID: AEEventID(kAEGetURL)
         )
+
+        // Load persisted rules. Hop to the main actor to satisfy isolation.
+        Task { @MainActor in
+            RuleStore.shared.load()
+        }
     }
 
     // MARK: - Modern API
