@@ -54,9 +54,75 @@ See [SPEC.md](./SPEC.md) for the architectural design.
 | **M6** | URL rewriting, profile selection, edge cases |
 | **M7** | Signing + notarization + Homebrew cask → v0.1 |
 
+## Configuring rules
+
+Junction reads rules from `~/Library/Application Support/Junction/rules.json`. On first launch it bootstraps an empty file there. A settings UI lands in **M5**; until then, edit the JSON directly and pick **Reload Rules** (`⌥⌘R`) from the menu to apply changes without restarting.
+
+Example:
+
+```json
+{
+  "schemaVersion": 1,
+  "rules": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "GitHub → work Chrome",
+      "enabled": true,
+      "match": { "type": "host", "value": "github.com" },
+      "target": {
+        "browserBundleID": "com.google.Chrome",
+        "profile": "Default",
+        "extraArgs": [],
+        "openInNewWindow": false
+      }
+    },
+    {
+      "id": "22222222-2222-2222-2222-222222222222",
+      "name": "Google Workspace",
+      "enabled": true,
+      "match": {
+        "type": "hostRegex",
+        "value": "^(mail|calendar|docs|drive|meet)\\.google\\.com$"
+      },
+      "target": {
+        "browserBundleID": "com.google.Chrome",
+        "profile": "Default",
+        "extraArgs": [],
+        "openInNewWindow": false
+      }
+    },
+    {
+      "id": "33333333-3333-3333-3333-333333333333",
+      "name": "Hacker News → Safari",
+      "enabled": true,
+      "match": { "type": "urlContains", "value": "news.ycombinator.com" },
+      "target": {
+        "browserBundleID": "com.apple.Safari",
+        "extraArgs": [],
+        "openInNewWindow": false
+      }
+    }
+  ]
+}
+```
+
+**Matchers:**
+
+| Type | Behavior |
+|---|---|
+| `host` | Matches `value` exactly, **or** any subdomain of it. `"github.com"` matches `github.com`, `api.github.com`, etc. — but not `notgithub.com`. |
+| `hostRegex` | Case-insensitive regex against the URL's host. Power tool. |
+| `urlContains` | Case-insensitive substring against the full URL string. Use for path-based rules. |
+
+**Targets:**
+
+`browserBundleID` is required. `profile` is honored for Chromium browsers today (passed as `--profile-directory=<value>`); Firefox / Arc profile support arrives in **M6**. `extraArgs` are appended to the launch command. `openInNewWindow` requests a fresh app instance (useful for multi-window workflows).
+
+Rules are evaluated **in order**. The first enabled match wins. If no rule matches, Junction shows the picker.
+
 ## Building from source
 
-Currently at M1 (debug scaffold — no routing yet).
+Currently at M4 (rule engine with picker fallback).
 
 **Requirements:**
 

@@ -1,10 +1,11 @@
 import SwiftUI
+import AppKit
 
 /// Entry point for the Junction app.
 ///
-/// M1 scope: launch, register as `http://` / `https://` URL handler (via
-/// `Info.plist` `CFBundleURLTypes`), receive URL events, and display them in
-/// a debug window. No routing, no rules, no picker yet — that's M2+.
+/// M4 scope: rule-based silent routing with picker fallback. Every URL is
+/// run against `rules.json`; matches open directly in the rule's target,
+/// non-matches show the picker.
 @main
 struct JunctionApp: App {
     /// Bridge to AppKit so we can hook into URL events at the application
@@ -20,16 +21,21 @@ struct JunctionApp: App {
         WindowGroup("Junction — Debug Log", id: "debug") {
             DebugLogView()
                 .environmentObject(log)
-                .frame(minWidth: 520, minHeight: 360)
+                .frame(minWidth: 560, minHeight: 400)
         }
         .windowResizability(.contentMinSize)
         .commands {
-            // Hide menu items we don't use yet so the menu bar looks intentional.
             CommandGroup(replacing: .newItem) {}
             CommandGroup(after: .appInfo) {
                 Button("Clear Log") { log.clear() }
                     .keyboardShortcut(.delete, modifiers: [.command, .shift])
                     .disabled(log.entries.isEmpty)
+                Divider()
+                Button("Reload Rules") { RuleStore.shared.load() }
+                    .keyboardShortcut("r", modifiers: [.command, .option])
+                Button("Reveal rules.json in Finder") {
+                    NSWorkspace.shared.activateFileViewerSelecting([RuleStore.storeURL])
+                }
             }
         }
     }

@@ -1,16 +1,20 @@
 import SwiftUI
 
-/// The single window shown by Junction at M1/M2.
+/// The single window shown by Junction at M1–M4.
 ///
 /// Shows every URL we've received, newest first, with the time, which code
-/// path delivered it, and (at M2) the routing outcome. Empty state tells
-/// the user how to get URLs to appear.
+/// path delivered it, and the routing outcome (with reason: rule name or
+/// picker). Empty state tells the user how to get URLs to appear.
 struct DebugLogView: View {
     @EnvironmentObject private var log: URLLog
+    @ObservedObject private var ruleStore = RuleStore.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+            if let error = ruleStore.lastError {
+                errorBanner(error)
+            }
             Divider()
             content
         }
@@ -23,7 +27,7 @@ struct DebugLogView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Received URLs")
                     .font(.headline)
-                Text("M3: every link shows a browser picker.")
+                Text("^[\(ruleStore.rules.count) rule](inflect: true) loaded · picker is the fallback")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -36,6 +40,20 @@ struct DebugLogView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+
+    private func errorBanner(_ message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            Text(message)
+                .font(.callout)
+                .lineLimit(2)
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.orange.opacity(0.08))
     }
 
     // MARK: - Content
@@ -58,7 +76,7 @@ struct DebugLogView: View {
                 .font(.title3.weight(.semibold))
             VStack(spacing: 4) {
                 Text("Set Junction as your default browser, then click a link anywhere.")
-                Text("Junction logs it here and pops up a browser picker.")
+                Text("Matching rules route silently; the rest pop up a browser picker.")
             }
             .font(.callout)
             .foregroundStyle(.secondary)
@@ -110,9 +128,13 @@ private struct EntryRow: View {
         switch entry.routing {
         case .pending:
             Label("routing…", systemImage: "ellipsis.circle")
-        case .routed(let target):
-            Label("→ \(target)", systemImage: "arrow.right.circle.fill")
-                .foregroundStyle(.green)
+        case .routed(let target, let reason):
+            HStack(spacing: 4) {
+                Label("→ \(target)", systemImage: "arrow.right.circle.fill")
+                    .foregroundStyle(.green)
+                Text(reasonText(reason))
+                    .foregroundStyle(.tertiary)
+            }
         case .failed(let reason):
             Label("failed: \(reason)", systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
@@ -124,6 +146,15 @@ private struct EntryRow: View {
                 .foregroundStyle(.secondary)
         }
     }
+
+    private func reasonText(_ reason: URLLog.RouteReason) -> String {
+        switch reason {
+        case .picker:
+            return "(picker)"
+        case .rule(let name):
+            return "(rule: \(name))"
+        }
+    }
 }
 
 // MARK: - Previews
@@ -132,22 +163,24 @@ private struct EntryRow: View {
     let log = URLLog.shared
     log.clear()
     let id1 = log.append(URL(string: "https://github.com/pkajaba/junction")!, source: .openURLs)
-    let id2 = log.append(URL(string: "https://news.ycombinator.com/item?id=123456")!, source: .appleEvent)
-    let id3 = log.append(URL(string: "https://example.com/failing")!, source: .openURLs)
-    let id4 = log.append(URL(string: "mailto:hello@example.com")!, source: .openURLs)
-    let id5 = log.append(URL(string: "https://example.com/cancelled")!, source: .openURLs)
-    log.updateRouting(for: id1, to: .routed(to: "Safari"))
-    log.updateRouting(for: id2, to: .pending)
-    log.updateRouting(for: id3, to: .failed(reason: "Safari not installed"))
-    log.updateRouting(for: id4, to: .unsupported)
-    log.updateRouting(for: id5, to: .cancelled)
+    let id2 = log.append(URL(string: "https://docs.google.com/document/d/abc")!, source: .openURLs)
+    let id3 = log.append(URL(string: "https://news.ycombinator.com")!, source: .appleEvent)
+    let id4 = log.append(URL(string: "https://example.com/failing")!, source: .openURLs)
+    let id5 = log.append(URL(string: "mailto:hello@example.com")!, source: .openURLs)
+    let id6 = log.append(URL(string: "https://example.com/cancelled")!, source: .openURLs)
+    log.updateRouting(for: id1, to: .routed(to: "Chrome", via: .rule(name: "github → work Chrome")))
+    log.updateRouting(for: id2, to: .routed(to: "Chrome", via: .rule(name: "Google Workspace")))
+    log.updateRouting(for: id3, to: .routed(to: "Safari", via: .picker))
+    log.updateRouting(for: id4, to: .failed(reason: "Safari not installed"))
+    log.updateRouting(for: id5, to: .unsupported)
+    log.updateRouting(for: id6, to: .cancelled)
     return DebugLogView()
         .environmentObject(log)
-        .frame(width: 620, height: 360)
+        .frame(width: 680, height: 420)
 }
 
 #Preview("Empty") {
     DebugLogView()
         .environmentObject(URLLog.shared)
-        .frame(width: 620, height: 360)
+        .frame(width: 680, height: 420)
 }
