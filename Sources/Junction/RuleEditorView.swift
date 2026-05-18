@@ -23,6 +23,7 @@ struct RuleEditorView: View {
     @State private var testURL: String = ""
 
     @State private var allBrowsers: [DetectedBrowser] = []
+    @State private var detectedProfiles: [ProfileDetector.ProfileInfo] = []
 
     private enum MatcherType: String, CaseIterable, Identifiable {
         case host
@@ -79,7 +80,17 @@ struct RuleEditorView: View {
             actionBar
         }
         .frame(width: 540)
-        .onAppear { allBrowsers = BrowserDetector.shared.detectAll() }
+        .onAppear {
+            allBrowsers = BrowserDetector.shared.detectAll()
+            refreshProfiles()
+        }
+        .onChange(of: browserBundleID) { _, _ in
+            refreshProfiles()
+        }
+    }
+
+    private func refreshProfiles() {
+        detectedProfiles = ProfileDetector.detect(forBundleID: browserBundleID)
     }
 
     // MARK: - Title bar
@@ -129,9 +140,8 @@ struct RuleEditorView: View {
                         Text("\(browserBundleID) (not installed)").tag(browserBundleID)
                     }
                 }
-                TextField("Profile", text: $profile, prompt: Text("Default"))
-                    .font(.system(.body, design: .monospaced))
-                Text("Honored for Chromium browsers as `--profile-directory=<value>`. Leave blank to use the default.")
+                profileField
+                Text(profileFooterText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Toggle("Open in new window", isOn: $openInNewWindow)
@@ -144,6 +154,41 @@ struct RuleEditorView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    // MARK: - Profile field (dropdown when detected, free-text otherwise)
+
+    @ViewBuilder
+    private var profileField: some View {
+        if detectedProfiles.isEmpty {
+            TextField("Profile", text: $profile, prompt: Text("Default"))
+                .font(.system(.body, design: .monospaced))
+        } else {
+            Picker("Profile", selection: $profile) {
+                Text("(default)").tag("")
+                ForEach(detectedProfiles) { p in
+                    Text(profileLabel(for: p)).tag(p.id)
+                }
+                // Allow keeping a value that's no longer in the detected list
+                // (e.g., a profile was renamed after the rule was created).
+                if !profile.isEmpty && !detectedProfiles.contains(where: { $0.id == profile }) {
+                    Text("\(profile) (not detected)").tag(profile)
+                }
+            }
+        }
+    }
+
+    private func profileLabel(for p: ProfileDetector.ProfileInfo) -> String {
+        if p.id == p.displayName { return p.id }
+        return "\(p.displayName) — \(p.id)"
+    }
+
+    private var profileFooterText: String {
+        if detectedProfiles.isEmpty {
+            return "Profile is honored for Chromium and Firefox targets. Leave blank to use the default profile."
+        } else {
+            return "Choose a profile detected on this Mac. \"(default)\" leaves the field blank — the browser opens with whichever profile it last used."
+        }
     }
 
     @ViewBuilder

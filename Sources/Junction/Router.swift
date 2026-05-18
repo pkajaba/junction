@@ -3,10 +3,13 @@ import Foundation
 
 /// Decides where to send each received URL.
 ///
-/// Flow at M4:
+/// Flow at M6:
 /// 1. Reject non-http(s) schemes early.
-/// 2. Try the rule engine. If a rule matches, open silently in the rule's target.
-/// 3. No match → show the picker. User's choice is treated as a one-shot rule.
+/// 2. Apply `URLRewriter` (e.g. strip tracking params).
+/// 3. Try the rule engine against the rewritten URL.
+/// 4. If a rule matches, open silently in the rule's target.
+/// 5. No match → show the picker. User's choice is treated as a one-shot route,
+///    unless ⌥ is held in which case Junction creates a rule for the host.
 @MainActor
 final class Router {
 
@@ -20,10 +23,17 @@ final class Router {
             return
         }
 
+        // Rewrite (currently: strip tracking params) before matching/opening.
+        let cleaned = URLRewriter.rewrite(url, settings: RewriterSettings.shared)
+        if cleaned != url {
+            URLLog.shared.updateRewritten(for: entryID, to: cleaned)
+        }
+        let target_url = cleaned
+
         // 1. Rule match → silent route.
-        if let rule = RuleEvaluator.evaluate(url, against: RuleStore.shared.rules) {
+        if let rule = RuleEvaluator.evaluate(target_url, against: RuleStore.shared.rules) {
             open(
-                url: url,
+                url: target_url,
                 target: rule.target,
                 reason: .rule(name: rule.name),
                 entryID: entryID
@@ -32,33 +42,30 @@ final class Router {
         }
 
         // 2. No match → picker.
-        PickerController.shared.present(url: url) { [weak self] outcome in
+        PickerController.shared.present(url: target_url) { [weak self] outcome in
             Task { @MainActor in
                 switch outcome {
                 case .picked(let browser):
                     let target = Target(browserBundleID: browser.bundleID)
                     self?.open(
-                        url: url,
+                        url: target_url,
                         target: target,
                         reason: .picker,
                         entryID: entryID
                     )
                 case .pickedAlways(let browser):
-                    // Create a rule for this domain so the picker doesn't
-                    // appear next time, then open the URL via that rule.
                     let target = Target(browserBundleID: browser.bundleID)
-                    if let rule = self?.makeAlwaysRule(for: url, target: target) {
+                    if let rule = self?.makeAlwaysRule(for: target_url, target: target) {
                         RuleStore.shared.add(rule)
                         self?.open(
-                            url: url,
+                            url: target_url,
                             target: target,
                             reason: .rule(name: rule.name),
                             entryID: entryID
                         )
                     } else {
-                        // URL has no host — fall back to a one-shot route.
                         self?.open(
-                            url: url,
+                            url: target_url,
                             target: target,
                             reason: .picker,
                             entryID: entryID
@@ -121,21 +128,28 @@ final class Router {
     // MARK: - Per-browser launch arg quirks
 
     /// Build CLI arguments for the launched browser, handling profile
-    /// selection for Chromium-based browsers. Firefox / Arc profiles work
-    /// differently and land at M6.
+    /// selection per browser family.
+    ///
+    /// - **Chromium** (Chrome, Brave, Edge, Vivaldi, Opera): `--profile-directory=<dir>`
+    /// - **Firefox**: `-P <name>` (only effective on cold launch — if Firefox
+    ///   is already running with a different profile, the flag is mostly
+    ///   ignored. Power users should pair Firefox profiles with the rule's
+    ///   "Open in new window" toggle.)
+    /// - **Safari / Arc**: profile field ignored (profile model differs;
+    ///   future work).
     private func launchArguments(for target: Target) -> [String] {
         var args = target.extraArgs
-        if let profile = target.profile,
-           !profile.isEmpty,
-           isChromiumBased(target.browserBundleID) {
+        guard let profile = target.profile, !profile.isEmpty else { return args }
+
+        if isChromiumBased(target.browserBundleID) {
             args.append("--profile-directory=\(profile)")
+        } else if isFirefoxFamily(target.browserBundleID) {
+            args.append(contentsOf: ["-P", profile])
         }
         return args
     }
 
     private func isChromiumBased(_ bundleID: String) -> Bool {
-        // The set of Chromium-family browsers that accept --profile-directory.
-        // Keep in sync with BrowserDetector's known-IDs.
         let chromium: Set<String> = [
             "com.google.Chrome",
             "com.google.Chrome.canary",
@@ -151,10 +165,17 @@ final class Router {
             "com.microsoft.edgemac.Canary",
             "com.vivaldi.Vivaldi",
             "com.operasoftware.Opera",
-            // Arc (company.thebrowser.Browser) uses "Spaces", not profile directories.
-            // Excluded intentionally — M6 will add proper Arc-style support.
         ]
         return chromium.contains(bundleID)
+    }
+
+    private func isFirefoxFamily(_ bundleID: String) -> Bool {
+        let firefox: Set<String> = [
+            "org.mozilla.firefox",
+            "org.mozilla.firefoxdeveloperedition",
+            "org.mozilla.nightly",
+        ]
+        return firefox.contains(bundleID)
     }
 
     // MARK: - "Always" rule construction

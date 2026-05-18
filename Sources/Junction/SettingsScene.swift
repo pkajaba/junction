@@ -6,6 +6,7 @@ struct SettingsScene: View {
     enum Tab: Hashable {
         case rules
         case browsers
+        case advanced
     }
 
     @State private var selectedTab: Tab = .rules
@@ -19,6 +20,10 @@ struct SettingsScene: View {
             BrowsersSettingsView()
                 .tabItem { Label("Browsers", systemImage: "app.badge") }
                 .tag(Tab.browsers)
+
+            AdvancedSettingsView()
+                .tabItem { Label("Advanced", systemImage: "slider.horizontal.3") }
+                .tag(Tab.advanced)
         }
         .frame(minWidth: 720, idealWidth: 760, minHeight: 480, idealHeight: 540)
     }
