@@ -5,9 +5,13 @@ import AppKit
 /// keyboard-shortcut footer. The whole thing is keyboard-driven so a power
 /// user never needs to reach for the mouse.
 ///
-/// "Always for this domain" affordance (M5+): hold Option (⌥) when picking
-/// — clicking a tile, pressing a digit, or pressing Return — and Junction
-/// saves a rule so the same domain skips the picker next time.
+/// Two affordances for the "always for this domain" path:
+///
+/// 1. **Pin button** (visible). Each tile has a small pin icon in the
+///    top-right corner. Clicking it saves a rule for the URL's host and
+///    routes the current URL via that rule.
+/// 2. **⌥ modifier** (power user). Hold Option while clicking, pressing a
+///    digit, or pressing Return — same effect.
 struct PickerView: View {
     let url: URL
     let browsers: [DetectedBrowser]
@@ -112,16 +116,28 @@ struct PickerView: View {
                     browser: browser,
                     number: index + 1,
                     isSelected: index == selectedIndex,
-                    pinned: optionHeld
+                    optionHeld: optionHeld,
+                    pinTooltip: pinTooltip,
+                    onOpenOnce: {
+                        selectedIndex = index
+                        commitOnce(browser: browser)
+                    },
+                    onOpenAlways: {
+                        selectedIndex = index
+                        commitAlways(browser: browser)
+                    }
                 )
-                .onTapGesture {
-                    selectedIndex = index
-                    commitSelected()
-                }
                 .help(browser.displayName)
             }
         }
         .padding(16)
+    }
+
+    private var pinTooltip: String {
+        if let host = url.host {
+            return "Always open \(host) here"
+        }
+        return "Always open this site here"
     }
 
     // MARK: - Empty state
@@ -152,8 +168,13 @@ struct PickerView: View {
                 if browsers.count > columnCount {
                     KeyHint(keys: "↑↓", text: "rows")
                 }
-                KeyHint(keys: "↩", text: "open")
-                KeyHint(keys: "⌥", text: "always")
+                KeyHint(keys: "↩", text: "open once")
+                Label {
+                    Text("or click pin for always")
+                } icon: {
+                    Image(systemName: "pin.fill")
+                }
+                .labelStyle(.titleAndIcon)
             }
             Spacer()
             KeyHint(keys: "esc", text: "cancel")
@@ -173,16 +194,26 @@ struct PickerView: View {
         selectedIndex = ((selectedIndex + delta) % count + count) % count
     }
 
+    /// Keyboard commit path — Enter / digit. Reads ⌥ to decide once vs always.
     private func commitSelected() {
         guard browsers.indices.contains(selectedIndex) else {
             onResolve(.cancelled)
             return
         }
         let browser = browsers[selectedIndex]
-        // Read modifier state at the moment of commit — works for click,
-        // digit, and Return paths uniformly.
-        let isAlways = NSEvent.modifierFlags.contains(.option)
-        onResolve(isAlways ? .pickedAlways(browser) : .picked(browser))
+        if NSEvent.modifierFlags.contains(.option) {
+            commitAlways(browser: browser)
+        } else {
+            commitOnce(browser: browser)
+        }
+    }
+
+    private func commitOnce(browser: DetectedBrowser) {
+        onResolve(.picked(browser))
+    }
+
+    private func commitAlways(browser: DetectedBrowser) {
+        onResolve(.pickedAlways(browser))
     }
 
     // MARK: - Modifier key monitor
@@ -212,9 +243,53 @@ private struct BrowserTile: View {
     let browser: DetectedBrowser
     let number: Int
     let isSelected: Bool
-    let pinned: Bool
+    let optionHeld: Bool
+    let pinTooltip: String
+    let onOpenOnce: () -> Void
+    let onOpenAlways: () -> Void
+
+    @State private var hoveringPin: Bool = false
 
     var body: some View {
+        ZStack(alignment: .topTrailing) {
+            // Main tile body — clicking anywhere here opens once.
+            Button(action: onOpenOnce) {
+                tileBody
+            }
+            .buttonStyle(.plain)
+
+            // Pin button — clicking opens AND saves a rule.
+            // SwiftUI's Button-inside-Button is handled correctly by the
+            // hit-test system: clicks on the pin reach this Button, not
+            // the parent.
+            Button(action: onOpenAlways) {
+                Image(systemName: "pin.fill")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(5)
+                    .background(
+                        Color.accentColor.opacity(pinProminence),
+                        in: Circle()
+                    )
+            }
+            .buttonStyle(.plain)
+            .padding(6)
+            .onHover { hoveringPin = $0 }
+            .help(pinTooltip)
+        }
+    }
+
+    /// How loud the pin should look right now. Subtle by default so it
+    /// doesn't fight the icon; bold when the user is interacting with it
+    /// or holding ⌥ (signalling intent).
+    private var pinProminence: Double {
+        if hoveringPin { return 1.0 }
+        if optionHeld && isSelected { return 1.0 }
+        if isSelected { return 0.55 }
+        return 0.35
+    }
+
+    private var tileBody: some View {
         VStack(spacing: 6) {
             ZStack(alignment: .topLeading) {
                 Image(nsImage: browser.icon)
@@ -228,15 +303,6 @@ private struct BrowserTile: View {
                     .padding(.vertical, 2)
                     .background(.black.opacity(0.6), in: Capsule())
                     .padding(2)
-                if pinned && isSelected {
-                    Image(systemName: "pin.fill")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.white)
-                        .padding(4)
-                        .background(Color.accentColor, in: Circle())
-                        .padding(2)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                }
             }
             Text(browser.displayName)
                 .font(.caption)
@@ -254,7 +320,7 @@ private struct BrowserTile: View {
                 .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 2)
         )
         .contentShape(Rectangle())
-        .accessibilityLabel("\(browser.displayName), press \(number) or Return to open. Hold Option to always open this domain here.")
+        .accessibilityLabel("\(browser.displayName), press \(number) or Return to open once. Press the pin button to always open this domain here.")
     }
 }
 
