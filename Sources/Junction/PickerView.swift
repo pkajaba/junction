@@ -38,17 +38,7 @@ struct PickerView: View {
             Divider()
             footer
         }
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(
-                    optionHeld
-                        ? Color.accentColor.opacity(0.7)
-                        : Color(nsColor: .separatorColor).opacity(0.6),
-                    lineWidth: optionHeld ? 2 : 0.5
-                )
-        )
+        .junctionPickerBackground(cornerRadius: 14, optionHeld: optionHeld)
         .frame(width: 540)
         .focusable()
         .focused($hasFocus)
@@ -311,14 +301,7 @@ private struct BrowserTile: View {
         }
         .frame(maxWidth: .infinity)
         .padding(8)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 2)
-        )
+        .junctionTileBackground(isSelected: isSelected)
         .contentShape(Rectangle())
         .accessibilityLabel("\(browser.displayName), press \(number) or Return to open once. Press the pin button to always open this domain here.")
     }
