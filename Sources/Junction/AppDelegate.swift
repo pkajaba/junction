@@ -23,9 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             andEventID: AEEventID(kAEGetURL)
         )
 
-        // Load persisted rules. Hop to the main actor to satisfy isolation.
+        // Load persisted rules and start watching rules.json for external edits.
         Task { @MainActor in
-            RuleStore.shared.load()
+            RuleStore.shared.startup()
         }
     }
 

@@ -56,7 +56,12 @@ See [SPEC.md](./SPEC.md) for the architectural design.
 
 ## Configuring rules
 
-Junction reads rules from `~/Library/Application Support/Junction/rules.json`. On first launch it bootstraps an empty file there. A settings UI lands in **M5**; until then, edit the JSON directly and pick **Reload Rules** (`⌥⌘R`) from the menu to apply changes without restarting.
+Two ways to manage rules:
+
+1. **Settings UI** (`⌘,` or **Junction → Settings…**). The **Rules** tab has add / edit / delete, drag-to-reorder, a built-in "Test URL" field, and a per-rule enable toggle. The **Browsers** tab lets you hide unwanted browsers from the picker.
+2. **Edit `~/Library/Application Support/Junction/rules.json`** directly. Junction watches the file and reloads automatically when you save (via FSEventStream). The **Reload Rules** menu item (`⌥⌘R`) is also available if you want to force a refresh.
+
+You can also create a rule on-the-fly from the picker: when an unmatched URL pops the picker, hold **⌥ (Option)** while clicking a browser (or pressing a digit / Return). Junction saves a rule for that domain → that browser, so the next URL on the same domain skips the picker.
 
 Example:
 
@@ -122,7 +127,7 @@ Rules are evaluated **in order**. The first enabled match wins. If no rule match
 
 ## Building from source
 
-Currently at M4 (rule engine with picker fallback).
+Currently at M5 (settings UI + live reload + "Always" affordance).
 
 **Requirements:**
 

@@ -3,9 +3,9 @@ import AppKit
 
 /// Entry point for the Junction app.
 ///
-/// M4 scope: rule-based silent routing with picker fallback. Every URL is
-/// run against `rules.json`; matches open directly in the rule's target,
-/// non-matches show the picker.
+/// M5 scope: full Settings UI (Rules + Browsers), live reload of
+/// `rules.json` from external edits, and the picker's "Always for this
+/// domain" affordance via Option-modifier.
 @main
 struct JunctionApp: App {
     /// Bridge to AppKit so we can hook into URL events at the application
@@ -21,7 +21,7 @@ struct JunctionApp: App {
         WindowGroup("Junction — Debug Log", id: "debug") {
             DebugLogView()
                 .environmentObject(log)
-                .frame(minWidth: 560, minHeight: 400)
+                .frame(minWidth: 580, minHeight: 420)
         }
         .windowResizability(.contentMinSize)
         .commands {
@@ -37,6 +37,11 @@ struct JunctionApp: App {
                     NSWorkspace.shared.activateFileViewerSelecting([RuleStore.storeURL])
                 }
             }
+        }
+
+        // Standard macOS Settings window — accessible via ⌘, or "Junction → Settings…"
+        Settings {
+            SettingsScene()
         }
     }
 }

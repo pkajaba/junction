@@ -8,9 +8,11 @@ import Foundation
 /// missing file leaves the in-memory state untouched (or empty on first
 /// launch) and surfaces the error via `lastError` for the UI to display.
 ///
-/// Live reload (file watching for external edits) is deferred to M5 along
-/// with the Settings UI. For now, users can edit `rules.json` and pick
-/// "Reload Rules" from the menu (⌥⌘R).
+/// Live reload: an `FSEventStream` on the parent directory triggers a
+/// re-read when the file changes. We compare the decoded array against
+/// in-memory state and only publish if it actually differs — that
+/// suppresses the loop of "we wrote → watcher fires → we 'reload' the
+/// same content → publish → views think rules changed".
 @MainActor
 final class RuleStore: ObservableObject {
 
@@ -32,6 +34,8 @@ final class RuleStore: ObservableObject {
     /// when their edits aren't taking effect.
     @Published private(set) var lastError: String?
 
+    private var fileWatcher: FileWatcher?
+
     private init() {}
 
     // MARK: - File location
@@ -46,10 +50,28 @@ final class RuleStore: ObservableObject {
         return dir.appendingPathComponent("rules.json")
     }
 
+    // MARK: - Lifecycle
+
+    /// Load from disk and start watching for external edits.
+    func startup() {
+        load()
+        startWatching()
+    }
+
+    private func startWatching() {
+        guard fileWatcher == nil else { return }
+        fileWatcher = FileWatcher(url: Self.storeURL) { [weak self] in
+            // Hops to main via FileWatcher; safe to call @MainActor methods.
+            Task { @MainActor in self?.load() }
+        }
+        fileWatcher?.start()
+    }
+
     // MARK: - Load / save
 
-    /// Read rules from disk. Bootstraps an empty file on first launch so
-    /// the user can find it.
+    /// Read rules from disk. Bootstraps an empty file on first launch.
+    /// No-op if the decoded content matches what we already have — avoids
+    /// a feedback loop with the file watcher.
     func load() {
         let url = Self.storeURL
 
@@ -70,7 +92,9 @@ final class RuleStore: ObservableObject {
         do {
             let data = try Data(contentsOf: url)
             let file = try JSONDecoder().decode(File.self, from: data)
-            self.rules = file.rules
+            if file.rules != self.rules {
+                self.rules = file.rules
+            }
             self.lastError = nil
         } catch {
             self.lastError = "rules.json: \(error.localizedDescription)"
@@ -83,12 +107,38 @@ final class RuleStore: ObservableObject {
         persist()
     }
 
+    // MARK: - CRUD
+
+    func add(_ rule: Rule) {
+        rules.append(rule)
+        persist()
+    }
+
+    func update(_ rule: Rule) {
+        guard let idx = rules.firstIndex(where: { $0.id == rule.id }) else { return }
+        rules[idx] = rule
+        persist()
+    }
+
+    func delete(id: UUID) {
+        rules.removeAll { $0.id == id }
+        persist()
+    }
+
+    /// Move rules by index set. Compatible with SwiftUI `List.onMove`.
+    func move(fromOffsets source: IndexSet, toOffset destination: Int) {
+        rules.move(fromOffsets: source, toOffset: destination)
+        persist()
+    }
+
     /// Replace the entire rules list and persist. Used by the future
-    /// settings UI; M4 callers don't need this yet.
+    /// settings UI's "import" feature.
     func replace(with newRules: [Rule]) {
         rules = newRules
         persist()
     }
+
+    // MARK: - Persistence
 
     private func persist() {
         do {

@@ -15,7 +15,11 @@ final class PickerController: NSObject {
 
     /// Outcome of a single picker session.
     enum Outcome: Equatable {
+        /// User picked a browser for this URL only.
         case picked(DetectedBrowser)
+        /// User picked a browser AND held Option — Router will save a rule
+        /// so this domain skips the picker next time.
+        case pickedAlways(DetectedBrowser)
         case cancelled
     }
 

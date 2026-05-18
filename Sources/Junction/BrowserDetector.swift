@@ -58,8 +58,17 @@ final class BrowserDetector {
 
     /// Returns recognized browsers installed on this Mac, sorted with Safari
     /// first (it's the macOS default and the most likely "personal" target),
-    /// then alphabetically.
+    /// then alphabetically. Excludes browsers the user has hidden via
+    /// `BrowserHideList` (Settings → Browsers tab).
     func detect() -> [DetectedBrowser] {
+        detectAll().filter { !BrowserHideList.shared.isHidden($0.bundleID) }
+    }
+
+    /// All recognized browsers, ignoring the hide list. Used by the
+    /// Browsers settings tab to show *everything* with toggles, and by
+    /// the rule editor's browser picker (a rule can target a hidden
+    /// browser — we just won't surface it in the picker UI).
+    func detectAll() -> [DetectedBrowser] {
         // Probe URL: any http URL works — we just want the list of registered handlers.
         guard let probe = URL(string: "https://example.com") else { return [] }
 

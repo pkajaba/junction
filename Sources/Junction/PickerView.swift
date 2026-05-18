@@ -4,12 +4,17 @@ import AppKit
 /// The picker UI itself: a URL header, a grid of browser tiles, and a
 /// keyboard-shortcut footer. The whole thing is keyboard-driven so a power
 /// user never needs to reach for the mouse.
+///
+/// "Always for this domain" affordance (M5+): hold Option (⌥) when picking
+/// — clicking a tile, pressing a digit, or pressing Return — and Junction
+/// saves a rule so the same domain skips the picker next time.
 struct PickerView: View {
     let url: URL
     let browsers: [DetectedBrowser]
     let onResolve: (PickerController.Outcome) -> Void
 
     @State private var selectedIndex: Int = 0
+    @State private var optionHeld: Bool = false
     @FocusState private var hasFocus: Bool
 
     private let columnCount = 4
@@ -33,13 +38,22 @@ struct PickerView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(.separator.opacity(0.5), lineWidth: 0.5)
+                .strokeBorder(
+                    optionHeld
+                        ? Color.accentColor.opacity(0.7)
+                        : Color(nsColor: .separatorColor).opacity(0.6),
+                    lineWidth: optionHeld ? 2 : 0.5
+                )
         )
         .frame(width: 540)
         .focusable()
         .focused($hasFocus)
         .focusEffectDisabled()
-        .onAppear { hasFocus = true }
+        .onAppear {
+            hasFocus = true
+            startModifierMonitor()
+        }
+        .onDisappear { stopModifierMonitor() }
         .onKeyPress(.escape) {
             onResolve(.cancelled)
             return .handled
@@ -76,6 +90,14 @@ struct PickerView: View {
                 .truncationMode(.middle)
                 .textSelection(.enabled)
             Spacer()
+            if optionHeld, let host = url.host {
+                Label("always for \(host)", systemImage: "pin.fill")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.accentColor.opacity(0.12), in: Capsule())
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -89,7 +111,8 @@ struct PickerView: View {
                 BrowserTile(
                     browser: browser,
                     number: index + 1,
-                    isSelected: index == selectedIndex
+                    isSelected: index == selectedIndex,
+                    pinned: optionHeld
                 )
                 .onTapGesture {
                     selectedIndex = index
@@ -110,7 +133,7 @@ struct PickerView: View {
                 .foregroundStyle(.tertiary)
             Text("No recognized browsers installed")
                 .font(.headline)
-            Text("Junction's known-browser list didn't match any installed app.\nA settings UI to add unlisted apps is coming in M5.")
+            Text("Junction's known-browser list didn't match any installed app.\nOpen Settings → Browsers to see what's detected.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -130,6 +153,7 @@ struct PickerView: View {
                     KeyHint(keys: "↑↓", text: "rows")
                 }
                 KeyHint(keys: "↩", text: "open")
+                KeyHint(keys: "⌥", text: "always")
             }
             Spacer()
             KeyHint(keys: "esc", text: "cancel")
@@ -154,7 +178,31 @@ struct PickerView: View {
             onResolve(.cancelled)
             return
         }
-        onResolve(.picked(browsers[selectedIndex]))
+        let browser = browsers[selectedIndex]
+        // Read modifier state at the moment of commit — works for click,
+        // digit, and Return paths uniformly.
+        let isAlways = NSEvent.modifierFlags.contains(.option)
+        onResolve(isAlways ? .pickedAlways(browser) : .picked(browser))
+    }
+
+    // MARK: - Modifier key monitor
+
+    @State private var modifierMonitor: Any?
+
+    private func startModifierMonitor() {
+        modifierMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+            optionHeld = event.modifierFlags.contains(.option)
+            return event
+        }
+        // Seed initial state.
+        optionHeld = NSEvent.modifierFlags.contains(.option)
+    }
+
+    private func stopModifierMonitor() {
+        if let monitor = modifierMonitor {
+            NSEvent.removeMonitor(monitor)
+            modifierMonitor = nil
+        }
     }
 }
 
@@ -164,6 +212,7 @@ private struct BrowserTile: View {
     let browser: DetectedBrowser
     let number: Int
     let isSelected: Bool
+    let pinned: Bool
 
     var body: some View {
         VStack(spacing: 6) {
@@ -179,6 +228,15 @@ private struct BrowserTile: View {
                     .padding(.vertical, 2)
                     .background(.black.opacity(0.6), in: Capsule())
                     .padding(2)
+                if pinned && isSelected {
+                    Image(systemName: "pin.fill")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(4)
+                        .background(Color.accentColor, in: Circle())
+                        .padding(2)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                }
             }
             Text(browser.displayName)
                 .font(.caption)
@@ -196,7 +254,7 @@ private struct BrowserTile: View {
                 .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 2)
         )
         .contentShape(Rectangle())
-        .accessibilityLabel("\(browser.displayName), press \(number) or Return to open")
+        .accessibilityLabel("\(browser.displayName), press \(number) or Return to open. Hold Option to always open this domain here.")
     }
 }
 
