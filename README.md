@@ -63,6 +63,22 @@ Two ways to manage rules:
 
 You can also create a rule on-the-fly from the picker: when an unmatched URL pops the picker, hold **⌥ (Option)** while clicking a browser (or pressing a digit / Return). Junction saves a rule for that domain → that browser, so the next URL on the same domain skips the picker.
 
+## URL rewriting
+
+Junction strips common tracking parameters (`utm_*`, `fbclid`, `gclid`, `msclkid`, and friends) from every URL **before** rule matching. The browser receives the clean URL — no more "look at all this UTM cruft in my address bar". The full list lives in **Settings → Advanced**, where you can add domain-specific tracking params or disable the feature.
+
+The rewrite is a pure value transform: no network requests, no logging, no analytics. Shortener expansion (following `t.co` / `bit.ly` redirects) is a planned post-v0.1 feature.
+
+## Profile support
+
+Per-browser profile launching is honored for:
+
+| Browser family | How |
+|---|---|
+| **Chromium** (Chrome, Brave, Edge, Vivaldi, Opera, plus channels) | `--profile-directory=<dir>`. Profiles are detected by reading the browser's `Local State` JSON, so the rule editor shows real names like "Personal" or "vetrofibermap.com" instead of asking you to remember `Default` vs `Profile 1`. |
+| **Firefox** (incl. Developer Edition, Nightly) | `-P <name>`. Profiles are read from `profiles.ini`. Note: the flag is most effective on cold launch — if Firefox is already running with a different profile, the OS may route the URL to that running instance instead. Pair with "Open in new window" if it matters. |
+| **Safari / Arc** | Not yet — Safari 17+ profiles and Arc Spaces use different models; planned for after v0.1. |
+
 Example:
 
 ```json
@@ -127,7 +143,7 @@ Rules are evaluated **in order**. The first enabled match wins. If no rule match
 
 ## Building from source
 
-Currently at M5 (settings UI + live reload + "Always" affordance).
+Currently at M6 (URL rewriting + multi-browser profile support).
 
 **Requirements:**
 

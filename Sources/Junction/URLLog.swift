@@ -37,7 +37,11 @@ final class URLLog: ObservableObject {
 
     struct Entry: Identifiable, Equatable {
         let id = UUID()
+        /// URL as received from macOS, before any rewriting.
         let url: URL
+        /// URL after `URLRewriter` ran, if it changed anything. The rule
+        /// engine and the open call both use this when present.
+        var rewritten: URL?
         let source: Source
         let receivedAt: Date
         var routing: Routing = .pending
@@ -63,6 +67,13 @@ final class URLLog: ObservableObject {
     func updateRouting(for id: UUID, to routing: Routing) {
         guard let idx = entries.firstIndex(where: { $0.id == id }) else { return }
         entries[idx].routing = routing
+    }
+
+    /// Record the post-rewrite URL on an entry. Called only when the
+    /// rewriter actually changed the URL.
+    func updateRewritten(for id: UUID, to rewritten: URL) {
+        guard let idx = entries.firstIndex(where: { $0.id == id }) else { return }
+        entries[idx].rewritten = rewritten
     }
 
     func clear() {

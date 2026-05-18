@@ -106,6 +106,19 @@ private struct EntryRow: View {
                 .textSelection(.enabled)
                 .lineLimit(2)
                 .truncationMode(.middle)
+            if let rewritten = entry.rewritten {
+                HStack(spacing: 6) {
+                    Image(systemName: "wand.and.stars")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text(rewritten.absoluteString)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
             HStack(spacing: 10) {
                 Label(entry.source.rawValue, systemImage: "arrow.down.right")
                 separator
