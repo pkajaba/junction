@@ -43,6 +43,27 @@ final class Router {
                         reason: .picker,
                         entryID: entryID
                     )
+                case .pickedAlways(let browser):
+                    // Create a rule for this domain so the picker doesn't
+                    // appear next time, then open the URL via that rule.
+                    let target = Target(browserBundleID: browser.bundleID)
+                    if let rule = self?.makeAlwaysRule(for: url, target: target) {
+                        RuleStore.shared.add(rule)
+                        self?.open(
+                            url: url,
+                            target: target,
+                            reason: .rule(name: rule.name),
+                            entryID: entryID
+                        )
+                    } else {
+                        // URL has no host — fall back to a one-shot route.
+                        self?.open(
+                            url: url,
+                            target: target,
+                            reason: .picker,
+                            entryID: entryID
+                        )
+                    }
                 case .cancelled:
                     URLLog.shared.updateRouting(for: entryID, to: .cancelled)
                 }
@@ -134,6 +155,25 @@ final class Router {
             // Excluded intentionally — M6 will add proper Arc-style support.
         ]
         return chromium.contains(bundleID)
+    }
+
+    // MARK: - "Always" rule construction
+
+    /// Build a Rule that captures "always send this URL's domain here".
+    /// Returns nil for URLs that have no host (which the scheme guard
+    /// should already reject, but defensive).
+    private func makeAlwaysRule(for url: URL, target: Target) -> Rule? {
+        guard let host = url.host, !host.isEmpty else { return nil }
+        let browserName = NSWorkspace.shared
+            .urlForApplication(withBundleIdentifier: target.browserBundleID)
+            .map { FileManager.default.displayName(atPath: $0.path)
+                .replacingOccurrences(of: ".app", with: "") }
+            ?? target.browserBundleID
+        return Rule(
+            name: "Always \(host) → \(browserName)",
+            match: .host(host),
+            target: target
+        )
     }
 
     // MARK: - Scheme guard
