@@ -1,0 +1,68 @@
+# SwiftLint configuration for Junction.
+#
+# Philosophy: keep checks that catch real bugs, relax checks that are pure
+# style. We can always tighten later — the cost of every rule is contributor
+# friction.
+
+included:
+  - Sources/Junction
+  - Tests
+
+excluded:
+  - build
+  - .build
+  - design                 # icon rendering scripts, not app code
+  - Junction.xcodeproj     # generated
+  - Sources/Junction/Assets.xcassets
+
+# === Loosen overly-strict defaults ===
+
+line_length:
+  warning: 180
+  error: 220
+  ignores_comments: true
+  ignores_urls: true
+
+function_body_length:
+  warning: 80
+  error: 120
+
+cyclomatic_complexity:
+  warning: 18
+  error: 25
+
+identifier_name:
+  min_length: 1            # allow short names for common closure params and
+                           # generic generic parameters (a, b, v, p, ...)
+  excluded:
+    - id
+
+type_body_length:
+  warning: 350
+  error: 500
+
+file_length:
+  warning: 600
+  error: 1000
+
+# === Disable style-only rules ===
+
+disabled_rules:
+  - trailing_comma                                 # adds diff noise; Swift allows it natively
+  - opening_brace                                  # SwiftUI multiline modifier chains trip this
+  - multiple_closures_with_trailing_closure        # idiomatic SwiftUI pattern
+  - colon                                          # we already use consistent style
+
+# === Opt-in rules that catch real bugs ===
+
+opt_in_rules:
+  - empty_count
+  - empty_string
+  - explicit_init
+  - first_where
+  - last_where
+  - prefer_self_in_static_references
+  - redundant_nil_coalescing
+  - sorted_first_last
+  - toggle_bool
+  - unowned_variable_capture
