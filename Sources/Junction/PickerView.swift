@@ -1,17 +1,17 @@
 import SwiftUI
 import AppKit
 
-/// The picker UI itself: a URL header, a grid of browser tiles, and a
-/// keyboard-shortcut footer. The whole thing is keyboard-driven so a power
-/// user never needs to reach for the mouse.
+/// Picker — v2 design (handoff Phase B).
 ///
-/// Two affordances for the "always for this domain" path:
+/// 560 px wide floating panel with a 26 px corner radius. Liquid Glass
+/// chrome — a system blur (`NSVisualEffectView` / `.glassEffect()`) with
+/// a white-tinted gradient overlay for the sheen. Vertical numbered
+/// rows; the first row is the "default" and gets a saturated blue
+/// gradient highlight with a `DEFAULT` eyebrow.
 ///
-/// 1. **Pin button** (visible). Each tile has a small pin icon in the
-///    top-right corner. Clicking it saves a rule for the URL's host and
-///    routes the current URL via that rule.
-/// 2. **⌥ modifier** (power user). Hold Option while clicking, pressing a
-///    digit, or pressing Return — same effect.
+/// Pin button is gone — Smart Suggestion mode (which would surface the
+/// explicit "Always" button) is deferred; "always" is ⌥↩ in this mode,
+/// documented in the keyboard footer.
 struct PickerView: View {
     let url: URL
     let browsers: [DetectedBrowser]
@@ -20,36 +20,23 @@ struct PickerView: View {
     @State private var selectedIndex: Int = 0
     @State private var optionHeld: Bool = false
     @FocusState private var hasFocus: Bool
-
-    private let columnCount = 4
-    private var columns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 12), count: columnCount)
-    }
+    @State private var modifierMonitor: Any?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(spacing: 0) {
             urlBar
-            Divider()
-            if browsers.isEmpty {
-                noBrowsersDetected
-            } else {
-                grid
-            }
-            Divider()
+            list
             footer
         }
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .frame(width: 560)
+        .background(panelBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(
-                    optionHeld
-                        ? Color.accentColor.opacity(0.7)
-                        : Color(nsColor: .separatorColor).opacity(0.6),
-                    lineWidth: optionHeld ? 2 : 0.5
-                )
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.55), lineWidth: 0.5)
         )
-        .frame(width: 540)
+        .shadow(color: Color(red: 0.08, green: 0.16, blue: 0.12).opacity(0.38),
+                radius: 40, y: 20)
         .focusable()
         .focused($hasFocus)
         .focusEffectDisabled()
@@ -58,23 +45,13 @@ struct PickerView: View {
             startModifierMonitor()
         }
         .onDisappear { stopModifierMonitor() }
-        .onKeyPress(.escape) {
-            onResolve(.cancelled)
-            return .handled
-        }
-        .onKeyPress(.return) {
-            commitSelected()
-            return .handled
-        }
-        .onKeyPress(.leftArrow)  { move(by: -1);            return .handled }
-        .onKeyPress(.rightArrow) { move(by:  1);            return .handled }
-        .onKeyPress(.upArrow)    { move(by: -columnCount); return .handled }
-        .onKeyPress(.downArrow)  { move(by:  columnCount); return .handled }
-        // Number keys 1-9: jump straight to that tile and open it.
+        .onKeyPress(.escape) { onResolve(.cancelled); return .handled }
+        .onKeyPress(.return) { commitSelected(); return .handled }
+        .onKeyPress(.upArrow)   { moveSelection(-1); return .handled }
+        .onKeyPress(.downArrow) { moveSelection( 1); return .handled }
         .onKeyPress { press in
-            guard
-                let digit = Int(press.characters),
-                digit >= 1, digit <= browsers.count
+            guard let digit = Int(press.characters),
+                  digit >= 1, digit <= browsers.count
             else { return .ignored }
             selectedIndex = digit - 1
             commitSelected()
@@ -82,150 +59,175 @@ struct PickerView: View {
         }
     }
 
-    // MARK: - Header
+    // MARK: - Panel material
+
+    @ViewBuilder
+    private var panelBackground: some View {
+        ZStack {
+            // System blur. NSVisualEffectView works on all supported macOS
+            // versions; on macOS 26 it composites with the new Liquid Glass
+            // post-processing for free.
+            VisualEffectBackground(material: .popover, blendingMode: .behindWindow)
+
+            // Sheen gradient on top of the blur — gives the panel a subtle
+            // brightness curve from top to bottom (the design spec calls
+            // this out as the visual signature of the new chrome).
+            LinearGradient(
+                stops: [
+                    .init(color: Color.white.opacity(0.38), location: 0.0),
+                    .init(color: Color.white.opacity(0.18), location: 0.6),
+                    .init(color: Color.white.opacity(0.22), location: 1.0),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            // Inset top highlight — barely visible but reads as "physical glass".
+            VStack(spacing: 0) {
+                Rectangle()
+                    .fill(Color.white.opacity(0.22))
+                    .frame(height: 1)
+                Spacer()
+            }
+            .allowsHitTesting(false)
+        }
+    }
+
+    // MARK: - URL bar
 
     private var urlBar: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "link")
-                .foregroundStyle(.secondary)
-            Text(url.absoluteString)
-                .font(.system(.callout, design: .monospaced))
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .textSelection(.enabled)
-            Spacer()
-            if optionHeld, let host = url.host {
-                Label("always for \(host)", systemImage: "pin.fill")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(Color.accentColor)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color.accentColor.opacity(0.12), in: Capsule())
+        HStack(spacing: 10) {
+            HostFavicon(host: url.host ?? "")
+            urlText
+            Spacer(minLength: 8)
+            noRuleMatchBadge
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+    }
+
+    private var urlText: some View {
+        let host = url.host ?? ""
+        let pathQuery: String = {
+            var s = url.path
+            if let q = url.query, !q.isEmpty { s += "?\(q)" }
+            return s
+        }()
+
+        return HStack(spacing: 0) {
+            Text(host)
+                .fontWeight(.bold)
+                .foregroundStyle(.black)
+            Text(pathQuery)
+                .foregroundStyle(.black.opacity(0.5))
+        }
+        .font(.system(size: 12.5, design: .monospaced))
+        .lineLimit(1)
+        .truncationMode(.middle)
+    }
+
+    private var noRuleMatchBadge: some View {
+        Text("no rule match")
+            .font(.system(size: 10.5, weight: .medium))
+            .foregroundStyle(.black.opacity(0.55))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Color.white.opacity(0.4))
+            )
+    }
+
+    // MARK: - List
+
+    @ViewBuilder
+    private var list: some View {
+        if browsers.isEmpty {
+            emptyState
+        } else {
+            VStack(spacing: 4) {
+                ForEach(Array(browsers.enumerated()), id: \.element.bundleID) { index, browser in
+                    PickerRow(
+                        browser: browser,
+                        number: index + 1,
+                        isSelected: index == selectedIndex,
+                        isDefault: index == 0,
+                        onTap: {
+                            selectedIndex = index
+                            commitSelected()
+                        }
+                    )
+                }
             }
+            .padding(.horizontal, 10)
+            .padding(.top, 10)
+            .padding(.bottom, 14)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
     }
 
-    // MARK: - Grid
-
-    private var grid: some View {
-        LazyVGrid(columns: columns, spacing: 12) {
-            ForEach(Array(browsers.enumerated()), id: \.element.bundleID) { index, browser in
-                BrowserTile(
-                    browser: browser,
-                    number: index + 1,
-                    isSelected: index == selectedIndex,
-                    optionHeld: optionHeld,
-                    pinTooltip: pinTooltip,
-                    onOpenOnce: {
-                        selectedIndex = index
-                        commitOnce(browser: browser)
-                    },
-                    onOpenAlways: {
-                        selectedIndex = index
-                        commitAlways(browser: browser)
-                    }
-                )
-                .help(browser.displayName)
-            }
-        }
-        .padding(16)
-    }
-
-    private var pinTooltip: String {
-        if let host = url.host {
-            return "Always open \(host) here"
-        }
-        return "Always open this site here"
-    }
-
-    // MARK: - Empty state
-
-    private var noBrowsersDetected: some View {
+    private var emptyState: some View {
         VStack(spacing: 8) {
             Image(systemName: "questionmark.app.dashed")
                 .font(.system(size: 32))
                 .foregroundStyle(.tertiary)
             Text("No recognized browsers installed")
                 .font(.headline)
-            Text("Junction's known-browser list didn't match any installed app.\nOpen Settings → Browsers to see what's detected.")
+            Text("Open Settings → Browsers to see what's detected.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(28)
     }
 
-    // MARK: - Footer
+    // MARK: - Keyboard footer
 
     private var footer: some View {
         HStack(spacing: 14) {
             if !browsers.isEmpty {
-                KeyHint(keys: "1–\(min(browsers.count, 9))", text: "pick")
-                KeyHint(keys: "←→", text: "move")
-                if browsers.count > columnCount {
-                    KeyHint(keys: "↑↓", text: "rows")
-                }
-                KeyHint(keys: "↩", text: "open once")
-                Label {
-                    Text("or click pin for always")
-                } icon: {
-                    Image(systemName: "pin.fill")
-                }
-                .labelStyle(.titleAndIcon)
+                KeyHint(keys: "1-\(min(browsers.count, 9))", text: "pick")
+                KeyHint(keys: "↑↓", text: "move")
+                KeyHint(keys: "↩", text: "open")
+                KeyHint(keys: "⌥↩", text: "always")
             }
             Spacer()
             KeyHint(keys: "esc", text: "cancel")
         }
-        .font(.caption2)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 16)
+        .font(.system(size: 11))
+        .foregroundStyle(.black.opacity(0.6))
+        .padding(.horizontal, 18)
         .padding(.vertical, 8)
+        .background(Color.white.opacity(0.18))
+        .overlay(
+            Rectangle()
+                .fill(Color.black.opacity(0.08))
+                .frame(height: 0.5),
+            alignment: .top
+        )
     }
 
     // MARK: - Selection logic
 
-    private func move(by delta: Int) {
+    private func moveSelection(_ delta: Int) {
         guard !browsers.isEmpty else { return }
         let count = browsers.count
-        // Modulo with wrap-around in both directions.
         selectedIndex = ((selectedIndex + delta) % count + count) % count
     }
 
-    /// Keyboard commit path — Enter / digit. Reads ⌥ to decide once vs always.
     private func commitSelected() {
         guard browsers.indices.contains(selectedIndex) else {
             onResolve(.cancelled)
             return
         }
         let browser = browsers[selectedIndex]
-        if NSEvent.modifierFlags.contains(.option) {
-            commitAlways(browser: browser)
-        } else {
-            commitOnce(browser: browser)
-        }
+        let isAlways = NSEvent.modifierFlags.contains(.option)
+        onResolve(isAlways ? .pickedAlways(browser) : .picked(browser))
     }
-
-    private func commitOnce(browser: DetectedBrowser) {
-        onResolve(.picked(browser))
-    }
-
-    private func commitAlways(browser: DetectedBrowser) {
-        onResolve(.pickedAlways(browser))
-    }
-
-    // MARK: - Modifier key monitor
-
-    @State private var modifierMonitor: Any?
 
     private func startModifierMonitor() {
         modifierMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
             optionHeld = event.modifierFlags.contains(.option)
             return event
         }
-        // Seed initial state.
         optionHeld = NSEvent.modifierFlags.contains(.option)
     }
 
@@ -237,116 +239,214 @@ struct PickerView: View {
     }
 }
 
-// MARK: - Tile
+// MARK: - Row
 
-private struct BrowserTile: View {
+private struct PickerRow: View {
     let browser: DetectedBrowser
     let number: Int
     let isSelected: Bool
-    let optionHeld: Bool
-    let pinTooltip: String
-    let onOpenOnce: () -> Void
-    let onOpenAlways: () -> Void
-
-    @State private var hoveringPin: Bool = false
+    let isDefault: Bool
+    let onTap: () -> Void
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            // Main tile body — clicking anywhere here opens once.
-            Button(action: onOpenOnce) {
-                tileBody
-            }
-            .buttonStyle(.plain)
+        HStack(spacing: 12) {
+            Image(nsImage: browser.icon)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 36, height: 36)
 
-            // Pin button — clicking opens AND saves a rule.
-            // SwiftUI's Button-inside-Button is handled correctly by the
-            // hit-test system: clicks on the pin reach this Button, not
-            // the parent.
-            Button(action: onOpenAlways) {
-                Image(systemName: "pin.fill")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.white)
-                    .padding(5)
-                    .background(
-                        Color.accentColor.opacity(pinProminence),
-                        in: Circle()
-                    )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(browser.displayName)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(isSelected ? Color.white : Color.primary)
+                    .lineLimit(1)
+                if isDefault {
+                    Text("DEFAULT")
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .kerning(0.4)
+                        .foregroundStyle(isSelected
+                                         ? Color.white.opacity(0.85)
+                                         : Color.secondary)
+                }
             }
-            .buttonStyle(.plain)
-            .padding(6)
-            .onHover { hoveringPin = $0 }
-            .help(pinTooltip)
+            Spacer()
+            KeyCap(text: "\(number)", isSelected: isSelected)
         }
-    }
-
-    /// How loud the pin should look right now. Subtle by default so it
-    /// doesn't fight the icon; bold when the user is interacting with it
-    /// or holding ⌥ (signalling intent).
-    private var pinProminence: Double {
-        if hoveringPin { return 1.0 }
-        if optionHeld && isSelected { return 1.0 }
-        if isSelected { return 0.55 }
-        return 0.35
-    }
-
-    private var tileBody: some View {
-        VStack(spacing: 6) {
-            ZStack(alignment: .topLeading) {
-                Image(nsImage: browser.icon)
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: 64, height: 64)
-                Text("\(number)")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(.black.opacity(0.6), in: Capsule())
-                    .padding(2)
-            }
-            Text(browser.displayName)
-                .font(.caption)
-                .lineLimit(1)
-                .truncationMode(.tail)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(8)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 2)
-        )
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(rowBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .contentShape(Rectangle())
-        .accessibilityLabel("\(browser.displayName), press \(number) or Return to open once. Press the pin button to always open this domain here.")
+        .onTapGesture { onTap() }
+    }
+
+    @ViewBuilder
+    private var rowBackground: some View {
+        if isSelected {
+            ZStack {
+                LinearGradient(
+                    colors: [
+                        Color(red: 30/255, green: 109/255, blue: 255/255).opacity(0.85),
+                        Color(red: 30/255, green: 109/255, blue: 255/255).opacity(0.95),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                // Inset top highlight to give the selected row physical depth.
+                VStack {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.25))
+                        .frame(height: 1)
+                    Spacer()
+                }
+                .allowsHitTesting(false)
+            }
+            .shadow(color: Color(red: 30/255, green: 109/255, blue: 255/255).opacity(0.3),
+                    radius: 5, y: 2)
+        } else {
+            Color.clear
+        }
     }
 }
 
-// MARK: - Footer pill
+// MARK: - Keycap (the "1" on the right of each row)
+
+private struct KeyCap: View {
+    let text: String
+    let isSelected: Bool
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11, weight: .semibold, design: .default))
+            .foregroundStyle(isSelected ? Color.white : Color.black.opacity(0.7))
+            .frame(minWidth: 16)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(isSelected
+                          ? Color.white.opacity(0.18)
+                          : Color.white.opacity(0.7))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(isSelected
+                                  ? Color.white.opacity(0.25)
+                                  : Color.black.opacity(0.1),
+                                  lineWidth: 0.5)
+            )
+    }
+}
+
+// MARK: - Footer keyboard hint
 
 private struct KeyHint: View {
     let keys: String
     let text: String
+
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 5) {
             Text(keys)
-                .font(.caption2.weight(.semibold))
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.black.opacity(0.75))
                 .padding(.horizontal, 5)
                 .padding(.vertical, 1)
-                .background(Color.secondary.opacity(0.18),
-                            in: RoundedRectangle(cornerRadius: 4))
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.white.opacity(0.9))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(Color.black.opacity(0.08), lineWidth: 0.5)
+                )
             Text(text)
         }
     }
 }
 
+// MARK: - Host favicon placeholder
+
+/// 18×18 colored square with the first letter of the host — a lightweight
+/// stand-in for real per-site favicons. The design handoff suggests
+/// fetching `https://www.google.com/s2/favicons?domain=<host>&sz=64` as a
+/// follow-up; that introduces a network dependency we want to weigh
+/// carefully (privacy: each picker pop sends a request to Google). Local
+/// glyph for v2; favicon-fetch can be a later opt-in.
+private struct HostFavicon: View {
+    let host: String
+
+    private var firstChar: String {
+        String(host.prefix(1)).uppercased()
+    }
+
+    private var tint: Color {
+        // Deterministic-but-pretty color from the host string. Hash → hue.
+        let hash = host.unicodeScalars.reduce(0) { ($0 &* 31) &+ Int($1.value) }
+        let hue = Double(abs(hash) % 360) / 360.0
+        return Color(hue: hue, saturation: 0.55, brightness: 0.55)
+    }
+
+    var body: some View {
+        Text(firstChar.isEmpty ? "?" : firstChar)
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(.white)
+            .frame(width: 18, height: 18)
+            .background(
+                LinearGradient(
+                    colors: [tint, tint.opacity(0.75)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+    }
+}
+
+// MARK: - NSVisualEffectView bridge
+
+/// SwiftUI wrapper for `NSVisualEffectView` so we can use the same blur
+/// material the system Settings windows and menus use. Backed by AppKit,
+/// works on every supported macOS version.
+private struct VisualEffectBackground: NSViewRepresentable {
+    let material: NSVisualEffectView.Material
+    let blendingMode: NSVisualEffectView.BlendingMode
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = material
+        view.blendingMode = blendingMode
+        view.state = .active
+        view.isEmphasized = true
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = material
+        nsView.blendingMode = blendingMode
+    }
+}
+
 // MARK: - Previews
+
+#Preview("Two browsers (fallback)") {
+    PickerView(
+        url: URL(string: "https://news.ycombinator.com/item?id=39842110")!,
+        browsers: [
+            DetectedBrowser(bundleID: "com.apple.Safari",
+                            displayName: "Safari",
+                            appURL: URL(fileURLWithPath: "/Applications/Safari.app")),
+            DetectedBrowser(bundleID: "com.google.Chrome",
+                            displayName: "Google Chrome",
+                            appURL: URL(fileURLWithPath: "/Applications/Google Chrome.app")),
+        ],
+        onResolve: { _ in }
+    )
+    .padding(24)
+}
 
 #Preview("Many browsers") {
     PickerView(
-        url: URL(string: "https://news.ycombinator.com/item?id=123456")!,
+        url: URL(string: "https://example.com/some/long/path?query=value")!,
         browsers: [
             DetectedBrowser(bundleID: "com.apple.Safari",
                             displayName: "Safari",
@@ -363,14 +463,5 @@ private struct KeyHint: View {
         ],
         onResolve: { _ in }
     )
-    .padding(20)
-}
-
-#Preview("None detected") {
-    PickerView(
-        url: URL(string: "https://example.com")!,
-        browsers: [],
-        onResolve: { _ in }
-    )
-    .padding(20)
+    .padding(24)
 }
