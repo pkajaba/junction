@@ -59,13 +59,48 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.pkajaba.junction
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_PREVIEWS: YES
+    preBuildScripts:
+      - name: SwiftLint
+        script: |
+          # Run SwiftLint if available; warn (don't fail the build) if not.
+          # CI installs it explicitly via brew. Local dev: `brew install swiftlint`.
+          if command -v swiftlint >/dev/null 2>&1; then
+            swiftlint
+          elif [ -x /opt/homebrew/bin/swiftlint ]; then
+            /opt/homebrew/bin/swiftlint
+          else
+            echo "warning: SwiftLint not installed — run \`brew install swiftlint\` to enable lint checks"
+          fi
+        basedOnDependencyAnalysis: false
+
+  JunctionTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Tests/JunctionTests
+        type: group
+    dependencies:
+      - target: Junction
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pkajaba.junction.tests
+        BUNDLE_LOADER: $(TEST_HOST)
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Junction.app/Contents/MacOS/Junction
+        # Tests don't need the @main app's hardened runtime constraints.
+        ENABLE_HARDENED_RUNTIME: NO
 
 schemes:
   Junction:
     build:
       targets:
         Junction: all
+        JunctionTests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - JunctionTests
     archive:
       config: Release

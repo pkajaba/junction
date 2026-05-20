@@ -28,12 +28,12 @@ final class Router {
         if cleaned != url {
             URLLog.shared.updateRewritten(for: entryID, to: cleaned)
         }
-        let target_url = cleaned
+        let cleanedURL = cleaned
 
         // 1. Rule match → silent route.
-        if let rule = RuleEvaluator.evaluate(target_url, against: RuleStore.shared.rules) {
+        if let rule = RuleEvaluator.evaluate(cleanedURL, against: RuleStore.shared.rules) {
             open(
-                url: target_url,
+                url: cleanedURL,
                 target: rule.target,
                 reason: .rule(name: rule.name),
                 entryID: entryID
@@ -42,30 +42,30 @@ final class Router {
         }
 
         // 2. No match → picker.
-        PickerController.shared.present(url: target_url) { [weak self] outcome in
+        PickerController.shared.present(url: cleanedURL) { [weak self] outcome in
             Task { @MainActor in
                 switch outcome {
                 case .picked(let browser):
                     let target = Target(browserBundleID: browser.bundleID)
                     self?.open(
-                        url: target_url,
+                        url: cleanedURL,
                         target: target,
                         reason: .picker,
                         entryID: entryID
                     )
                 case .pickedAlways(let browser):
                     let target = Target(browserBundleID: browser.bundleID)
-                    if let rule = self?.makeAlwaysRule(for: target_url, target: target) {
+                    if let rule = self?.makeAlwaysRule(for: cleanedURL, target: target) {
                         RuleStore.shared.add(rule)
                         self?.open(
-                            url: target_url,
+                            url: cleanedURL,
                             target: target,
                             reason: .rule(name: rule.name),
                             entryID: entryID
                         )
                     } else {
                         self?.open(
-                            url: target_url,
+                            url: cleanedURL,
                             target: target,
                             reason: .picker,
                             entryID: entryID

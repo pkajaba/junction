@@ -1,0 +1,65 @@
+name: CodeQL
+
+# Static security analysis. Runs on every push to main, on every PR, and
+# weekly (catches regressions in CodeQL queries themselves). Free for
+# public repos. Findings show up in the Security tab.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Mondays at 06:00 UTC — early enough to land in our triage window.
+    - cron: '0 6 * * 1'
+
+permissions:
+  security-events: write
+  actions: read
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [swift]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # Default query suite is "security-extended"; covers the OWASP-relevant
+          # checks for Swift.
+          queries: security-extended
+
+      - name: Install build tooling
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build for CodeQL
+        run: |
+          xcodebuild \
+            -project Junction.xcodeproj \
+            -scheme Junction \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
