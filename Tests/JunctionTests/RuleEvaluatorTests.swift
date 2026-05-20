@@ -86,7 +86,7 @@ final class RuleEvaluatorTests: XCTestCase {
     // MARK: - Evaluator ordering
 
     func test_evaluate_firstMatchWins() {
-        let rule1 = Rule(name: "first",  match: .host("example.com"), target: Target(browserBundleID: "first"))
+        let rule1 = Rule(name: "first", match: .host("example.com"), target: Target(browserBundleID: "first"))
         let rule2 = Rule(name: "second", match: .host("example.com"), target: Target(browserBundleID: "second"))
         let url = URL(string: "https://example.com")!
         let matched = RuleEvaluator.evaluate(url, against: [rule1, rule2])
@@ -97,8 +97,8 @@ final class RuleEvaluatorTests: XCTestCase {
     func test_evaluate_disabledRulesSkipped() {
         let disabled = Rule(name: "disabled", enabled: false, match: .host("example.com"),
                             target: Target(browserBundleID: "first"))
-        let enabled  = Rule(name: "enabled",                  match: .host("example.com"),
-                            target: Target(browserBundleID: "second"))
+        let enabled = Rule(name: "enabled", match: .host("example.com"),
+                           target: Target(browserBundleID: "second"))
         let url = URL(string: "https://example.com")!
         let matched = RuleEvaluator.evaluate(url, against: [disabled, enabled])
         XCTAssertEqual(matched?.target.browserBundleID, "second")

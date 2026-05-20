@@ -18,10 +18,12 @@ final class URLLog: ObservableObject {
     }
 
     /// Why a URL ended up where it did. Helps debug "why did this go to
-    /// Chrome silently?" — was it a rule match or did I click in the picker?
+    /// Chrome silently?" — was it a rule match, did I click in the picker,
+    /// or did Junction hand it off to a native app?
     enum RouteReason: Equatable {
         case picker
         case rule(name: String)
+        case handoff(name: String)
     }
 
     /// Outcome of attempting to route a received URL to a browser.

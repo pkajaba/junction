@@ -30,6 +30,16 @@ final class Router {
         }
         let cleanedURL = cleaned
 
+        // 0. Native-app handoff wins over rules. Rationale: if the user
+        // has Zoom installed AND enabled the Zoom handoff, they almost
+        // certainly want zoommtg:// over their generic Slack rule.
+        // Disable per-app in Settings → Advanced to override.
+        if let (handoff, nativeURL) = AppHandoffSettings.shared.handoff(for: cleanedURL),
+           handoff.isInstalled {
+            openHandoff(nativeURL, handoff: handoff, entryID: entryID)
+            return
+        }
+
         // 1. Rule match → silent route.
         if let rule = RuleEvaluator.evaluate(cleanedURL, against: RuleStore.shared.rules) {
             open(
@@ -122,6 +132,26 @@ final class Router {
                     )
                 }
             }
+        }
+    }
+
+    // MARK: - Native-app handoff
+
+    /// Open a rewritten native-scheme URL (e.g. `zoommtg://`) and record
+    /// the routing outcome on the log entry. NSWorkspace.open(URL) finds
+    /// the registered handler for the scheme; no explicit app URL needed.
+    private func openHandoff(_ nativeURL: URL, handoff: AppHandoff, entryID: UUID) {
+        let result = NSWorkspace.shared.open(nativeURL)
+        if result {
+            URLLog.shared.updateRouting(
+                for: entryID,
+                to: .routed(to: handoff.displayName, via: .handoff(name: handoff.displayName))
+            )
+        } else {
+            URLLog.shared.updateRouting(
+                for: entryID,
+                to: .failed(reason: "Couldn't open in \(handoff.displayName) — is the app installed?")
+            )
         }
     }
 

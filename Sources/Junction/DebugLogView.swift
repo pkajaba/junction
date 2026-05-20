@@ -166,6 +166,8 @@ private struct EntryRow: View {
             return "(picker)"
         case .rule(let name):
             return "(rule: \(name))"
+        case .handoff(let name):
+            return "(handoff → \(name))"
         }
     }
 }

@@ -168,7 +168,10 @@ struct RuleEditorView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Custom matcher")
                     .font(.system(size: 12.5, weight: .semibold))
-                Text("This rule uses a matcher Junction's visual editor can't yet represent — it's a raw regex or a URL-contains pattern. Edit it as JSON via the rules.json button below for now; full raw-mode editing lands in a follow-up.")
+                Text("This rule uses a matcher Junction's visual editor can't yet "
+                     + "represent — it's a raw regex or a URL-contains pattern. Edit it "
+                     + "as JSON via the rules.json button below for now; full raw-mode "
+                     + "editing lands in a follow-up.")
                     .font(.system(size: 11.5))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

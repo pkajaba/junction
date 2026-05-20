@@ -79,7 +79,7 @@ final class RuleCodableTests: XCTestCase {
     /// editing rules.json by hand will mistype things; failure mode
     /// matters.
     func test_matcher_unknownType_throwsDecodingError() {
-        let json = "{\"type\": \"magic\", \"value\": \"abc\"}".data(using: .utf8)!
+        let json = Data("{\"type\": \"magic\", \"value\": \"abc\"}".utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(Matcher.self, from: json))
     }
 
