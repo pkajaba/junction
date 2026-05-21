@@ -9,9 +9,8 @@ import AppKit
 /// rows; the first row is the "default" and gets a saturated blue
 /// gradient highlight with a `DEFAULT` eyebrow.
 ///
-/// Pin button is gone — Smart Suggestion mode (which would surface the
-/// explicit "Always" button) is deferred; "always" is ⌥↩ in this mode,
-/// documented in the keyboard footer.
+/// Each row carries a pin button — click it to save a rule that always
+/// routes this host to that browser. ⌥↩ does the same from the keyboard.
 struct PickerView: View {
     let url: URL
     let browsers: [DetectedBrowser]
@@ -33,10 +32,9 @@ struct PickerView: View {
         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.55), lineWidth: 0.5)
+                .strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.5)
         )
-        .shadow(color: Color(red: 0.08, green: 0.16, blue: 0.12).opacity(0.38),
-                radius: 40, y: 20)
+        .shadow(color: Color.black.opacity(0.28), radius: 30, y: 16)
         .focusable()
         .focused($hasFocus)
         .focusEffectDisabled()
@@ -63,33 +61,11 @@ struct PickerView: View {
 
     @ViewBuilder
     private var panelBackground: some View {
-        ZStack {
-            // System blur. NSVisualEffectView works on all supported macOS
-            // versions; on macOS 26 it composites with the new Liquid Glass
-            // post-processing for free.
-            VisualEffectBackground(material: .popover, blendingMode: .behindWindow)
-
-            // Sheen gradient on top of the blur — gives the panel a subtle
-            // brightness curve from top to bottom (the design spec calls
-            // this out as the visual signature of the new chrome).
-            LinearGradient(
-                stops: [
-                    .init(color: Color.white.opacity(0.38), location: 0.0),
-                    .init(color: Color.white.opacity(0.18), location: 0.6),
-                    .init(color: Color.white.opacity(0.22), location: 1.0),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            // Inset top highlight — barely visible but reads as "physical glass".
-            VStack(spacing: 0) {
-                Rectangle()
-                    .fill(Color.white.opacity(0.22))
-                    .frame(height: 1)
-                Spacer()
-            }
-            .allowsHitTesting(false)
-        }
+        // Clean system blur, no white sheen overlay — reads like Spotlight:
+        // you see through it, it doesn't go milky. `.hudWindow` is the
+        // material macOS uses for floating HUD panels; it's neutral and
+        // adapts to light/dark. On macOS 26 it composites with Liquid Glass.
+        VisualEffectBackground(material: .hudWindow, blendingMode: .behindWindow)
     }
 
     // MARK: - URL bar
@@ -116,9 +92,9 @@ struct PickerView: View {
         return HStack(spacing: 0) {
             Text(host)
                 .fontWeight(.bold)
-                .foregroundStyle(.black)
+                .foregroundStyle(.primary)
             Text(pathQuery)
-                .foregroundStyle(.black.opacity(0.5))
+                .foregroundStyle(.secondary)
         }
         .font(.system(size: 12.5, design: .monospaced))
         .lineLimit(1)
@@ -128,12 +104,12 @@ struct PickerView: View {
     private var noRuleMatchBadge: some View {
         Text("no rule match")
             .font(.system(size: 10.5, weight: .medium))
-            .foregroundStyle(.black.opacity(0.55))
+            .foregroundStyle(.secondary)
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
             .background(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(Color.white.opacity(0.4))
+                    .fill(Color.primary.opacity(0.08))
             )
     }
 
@@ -154,6 +130,10 @@ struct PickerView: View {
                         onTap: {
                             selectedIndex = index
                             commitSelected()
+                        },
+                        onPin: {
+                            // Pin = "always": open here AND save a host rule.
+                            onResolve(.pickedAlways(browser))
                         }
                     )
                 }
@@ -193,13 +173,23 @@ struct PickerView: View {
             KeyHint(keys: "esc", text: "cancel")
         }
         .font(.system(size: 11))
-        .foregroundStyle(.black.opacity(0.6))
+        .foregroundStyle(.secondary)
         .padding(.horizontal, 18)
         .padding(.vertical, 8)
-        .background(Color.white.opacity(0.18))
+        // The footer tint must round its own bottom corners to match the
+        // panel's 26 pt radius — a plain Color fill leaves square corners
+        // that poke past the panel's clip at the bottom edge.
+        .background(
+            UnevenRoundedRectangle(
+                bottomLeadingRadius: 26,
+                bottomTrailingRadius: 26,
+                style: .continuous
+            )
+            .fill(Color.primary.opacity(0.05))
+        )
         .overlay(
             Rectangle()
-                .fill(Color.black.opacity(0.08))
+                .fill(Color.primary.opacity(0.12))
                 .frame(height: 0.5),
             alignment: .top
         )
@@ -247,6 +237,7 @@ private struct PickerRow: View {
     let isSelected: Bool
     let isDefault: Bool
     let onTap: () -> Void
+    let onPin: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -270,6 +261,7 @@ private struct PickerRow: View {
                 }
             }
             Spacer()
+            PinButton(isSelected: isSelected, browserName: browser.displayName, action: onPin)
             KeyCap(text: "\(number)", isSelected: isSelected)
         }
         .padding(.horizontal, 12)
@@ -306,6 +298,43 @@ private struct PickerRow: View {
         } else {
             Color.clear
         }
+    }
+}
+
+// MARK: - Pin button (per-row "always for this site" affordance)
+
+/// Clicking the pin opens the link AND saves a host rule, so the same
+/// domain skips the picker next time. The keyboard equivalent is ⌥↩.
+/// Subtle at rest, accent-filled on hover so it's discoverable without
+/// shouting on every row.
+private struct PinButton: View {
+    let isSelected: Bool
+    let browserName: String
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "pin.fill")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(iconColor)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(circleColor))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Always open this site in \(browserName)")
+    }
+
+    private var iconColor: Color {
+        if hovering { return .white }
+        return isSelected ? .white.opacity(0.9) : .secondary
+    }
+
+    private var circleColor: Color {
+        if hovering { return .accentColor }
+        return isSelected ? Color.white.opacity(0.18) : Color.primary.opacity(0.08)
     }
 }
 
