@@ -21,6 +21,25 @@ struct PickerView: View {
     @FocusState private var hasFocus: Bool
     @State private var modifierMonitor: Any?
 
+    // Accessibility: faint hairlines disappear under Increase Contrast and
+    // under Reduce Transparency (where the panel goes opaque and a 0.5 pt
+    // edge stops reading). Bump edge weight in those modes.
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    private var emphasizeEdges: Bool {
+        contrast == .increased || reduceTransparency
+    }
+    private var panelBorderColor: Color {
+        Color.primary.opacity(emphasizeEdges ? 0.5 : 0.14)
+    }
+    private var panelBorderWidth: CGFloat {
+        emphasizeEdges ? 1 : 0.5
+    }
+    private var dividerColor: Color {
+        Color.primary.opacity(emphasizeEdges ? 0.45 : 0.12)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             urlBar
@@ -32,7 +51,7 @@ struct PickerView: View {
         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.5)
+                .strokeBorder(panelBorderColor, lineWidth: panelBorderWidth)
         )
         .shadow(color: Color.black.opacity(0.28), radius: 30, y: 16)
         .focusable()
@@ -120,27 +139,40 @@ struct PickerView: View {
         if browsers.isEmpty {
             emptyState
         } else {
-            VStack(spacing: 4) {
-                ForEach(Array(browsers.enumerated()), id: \.element.bundleID) { index, browser in
-                    PickerRow(
-                        browser: browser,
-                        number: index + 1,
-                        isSelected: index == selectedIndex,
-                        isDefault: index == 0,
-                        onTap: {
-                            selectedIndex = index
-                            commitSelected()
-                        },
-                        onPin: {
-                            // Pin = "always": open here AND save a host rule.
-                            onResolve(.pickedAlways(browser))
+            // Capped, scrollable list. With a handful of browsers it sizes
+            // naturally (no scroll); with 10+ it stays on-screen and the
+            // selection is kept visible as the user arrows through.
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 4) {
+                        ForEach(Array(browsers.enumerated()), id: \.element.bundleID) { index, browser in
+                            PickerRow(
+                                browser: browser,
+                                number: index + 1,
+                                isSelected: index == selectedIndex,
+                                isDefault: index == 0,
+                                onTap: {
+                                    selectedIndex = index
+                                    commitSelected()
+                                },
+                                onPin: {
+                                    // Pin = "always": open here AND save a host rule.
+                                    onResolve(.pickedAlways(browser))
+                                }
+                            )
                         }
-                    )
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.top, 10)
+                    .padding(.bottom, 14)
+                }
+                .frame(maxHeight: 380)
+                .scrollBounceBehavior(.basedOnSize)
+                .onChange(of: selectedIndex) { _, newIndex in
+                    guard browsers.indices.contains(newIndex) else { return }
+                    proxy.scrollTo(browsers[newIndex].bundleID, anchor: .center)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.top, 10)
-            .padding(.bottom, 14)
         }
     }
 
@@ -189,8 +221,8 @@ struct PickerView: View {
         )
         .overlay(
             Rectangle()
-                .fill(Color.primary.opacity(0.12))
-                .frame(height: 0.5),
+                .fill(dividerColor)
+                .frame(height: emphasizeEdges ? 1 : 0.5),
             alignment: .top
         )
     }

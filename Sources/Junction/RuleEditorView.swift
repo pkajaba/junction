@@ -81,8 +81,11 @@ struct RuleEditorView: View {
                     .fill(Color.black.opacity(0.025))
             )
             .overlay(
+                // .separatorColor adapts to dark mode and to the
+                // Increase Contrast accessibility setting for free —
+                // a fixed black-opacity hairline does neither.
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5)
+                    .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
             )
     }
 
