@@ -96,7 +96,7 @@ struct RulesSettingsView: View {
             .padding(.vertical, 5)
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.black.opacity(0.05))
+                    .fill(Color.primary.opacity(0.06))
             )
         }
         .padding(.horizontal, 14)
@@ -340,9 +340,7 @@ private struct RuleRow: View {
         Button(action: onTap) {
             HStack(spacing: 10) {
                 Circle()
-                    .fill(rule.enabled
-                          ? Color(red: 52/255, green: 168/255, blue: 83/255)
-                          : Color.black.opacity(0.25))
+                    .fill(rule.enabled ? Color.green : Color.secondary)
                     .frame(width: 6, height: 6)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(rule.name)
@@ -392,12 +390,12 @@ private struct ProfileChip: View {
     var body: some View {
         Text(name)
             .font(.system(size: 9.5, weight: .semibold))
-            .foregroundStyle(isSelected ? Color.white.opacity(0.85) : Color.black.opacity(0.55))
+            .foregroundStyle(isSelected ? Color.white.opacity(0.85) : Color.secondary)
             .padding(.horizontal, 5)
             .padding(.vertical, 1)
             .background(
                 RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .fill(isSelected ? Color.white.opacity(0.18) : Color.black.opacity(0.05))
+                    .fill(isSelected ? Color.white.opacity(0.18) : Color.primary.opacity(0.08))
             )
     }
 }

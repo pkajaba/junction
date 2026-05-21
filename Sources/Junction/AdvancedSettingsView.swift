@@ -8,6 +8,7 @@ struct AdvancedSettingsView: View {
 
     @ObservedObject private var rewriter = RewriterSettings.shared
     @ObservedObject private var handoffs = AppHandoffSettings.shared
+    @ObservedObject private var appearance = AppearanceSettings.shared
 
     @State private var draftParam: String = ""
 
@@ -16,10 +17,31 @@ struct AdvancedSettingsView: View {
             header
             Divider()
             Form {
+                appearanceSection
                 trackingSection
                 handoffSection
             }
             .formStyle(.grouped)
+        }
+    }
+
+    // MARK: - Appearance
+
+    @ViewBuilder
+    private var appearanceSection: some View {
+        Section {
+            Picker("Appearance", selection: $appearance.appearance) {
+                ForEach(AppearanceSettings.Appearance.allCases) { option in
+                    Text(option.label).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+        } header: {
+            Text("Appearance")
+        } footer: {
+            Text("\"System\" follows your macOS appearance. Light and Dark override it for Junction only.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 

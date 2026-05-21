@@ -68,7 +68,7 @@ struct RuleEditorView: View {
         Text(title.uppercased())
             .font(.system(size: 11, weight: .bold))
             .kerning(0.6)
-            .foregroundStyle(.black.opacity(0.55))
+            .foregroundStyle(.secondary)
             .padding(.bottom, 4)
     }
 
@@ -78,7 +78,7 @@ struct RuleEditorView: View {
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.black.opacity(0.025))
+                    .fill(Color.primary.opacity(0.04))
             )
             .overlay(
                 // .separatorColor adapts to dark mode and to the
@@ -123,7 +123,7 @@ struct RuleEditorView: View {
                             .font(.system(size: 12.5, weight: .medium))
                         Text("— so `m.mail.google.com` matches too")
                             .font(.system(size: 12.5))
-                            .foregroundStyle(.black.opacity(0.45))
+                            .foregroundStyle(.secondary)
                     }
                 }
                 .toggleStyle(.checkbox)
@@ -182,11 +182,11 @@ struct RuleEditorView: View {
                     .font(.system(size: 11.5, design: .monospaced))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(Color.white)
+                    .background(Color(nsColor: .textBackgroundColor))
                     .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .strokeBorder(Color.black.opacity(0.1), lineWidth: 0.5)
+                            .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
                     )
                     .padding(.top, 2)
             }
@@ -209,7 +209,7 @@ struct RuleEditorView: View {
                 HStack {
                     Text("Browser")
                         .font(.system(size: 12))
-                        .foregroundStyle(.black.opacity(0.6))
+                        .foregroundStyle(.secondary)
                         .frame(width: 64, alignment: .leading)
                     Picker("", selection: $rule.target.browserBundleID) {
                         ForEach(allBrowsers) { browser in
@@ -227,7 +227,7 @@ struct RuleEditorView: View {
                 HStack {
                     Text("Profile")
                         .font(.system(size: 12))
-                        .foregroundStyle(.black.opacity(0.6))
+                        .foregroundStyle(.secondary)
                         .frame(width: 64, alignment: .leading)
                     profilePicker
                 }
@@ -235,12 +235,12 @@ struct RuleEditorView: View {
                     Label {
                         Text(note)
                             .font(.system(size: 11))
-                            .foregroundStyle(.black.opacity(0.55))
+                            .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     } icon: {
                         Image(systemName: "info.circle")
                             .font(.system(size: 11))
-                            .foregroundStyle(.black.opacity(0.4))
+                            .foregroundStyle(.secondary)
                     }
                     .labelStyle(.titleAndIcon)
                     .padding(.leading, 64 + 4)  // align with profile picker's left edge
@@ -345,15 +345,15 @@ struct RuleEditorView: View {
                 resultChip(
                     icon: "checkmark.circle.fill",
                     text: "Matches \(url.host ?? trimmed) — routes to \(browserDisplayName(rule.target.browserBundleID))\(profileSuffix)",
-                    foreground: Color(red: 31/255, green: 122/255, blue: 74/255),
-                    background: Color(red: 52/255, green: 168/255, blue: 83/255).opacity(0.12)
+                    foreground: Color.green,
+                    background: Color.green.opacity(0.15)
                 )
             } else {
                 resultChip(
                     icon: "arrow.down.right.circle",
                     text: "Falls through (no match) — picker would show",
-                    foreground: Color.black.opacity(0.55),
-                    background: Color.black.opacity(0.04)
+                    foreground: Color.secondary,
+                    background: Color.primary.opacity(0.06)
                 )
             }
         } else {
@@ -414,7 +414,7 @@ private struct HostChipView: View {
             Button(action: onRemove) {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.black.opacity(0.5))
+                    .foregroundStyle(.secondary)
                     .frame(width: 14, height: 14)
             }
             .buttonStyle(.plain)
@@ -424,12 +424,12 @@ private struct HostChipView: View {
         .padding(.vertical, 4)
         .background(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(Color.white)
+                .fill(Color(nsColor: .controlBackgroundColor))
                 .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.18), lineWidth: 0.5)
+                .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
         )
     }
 }
@@ -446,7 +446,7 @@ private struct AddChipField: View {
         HStack(spacing: 6) {
             Image(systemName: "plus")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.black.opacity(0.5))
+                .foregroundStyle(.secondary)
             TextField("Add host", text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12, design: .monospaced))
@@ -465,14 +465,14 @@ private struct AddChipField: View {
         .padding(.vertical, 4)
         .background(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(Color.black.opacity(0.03))
+                .fill(Color.primary.opacity(0.04))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .strokeBorder(
                     style: StrokeStyle(lineWidth: 0.5, dash: [3, 3])
                 )
-                .foregroundStyle(.black.opacity(0.22))
+                .foregroundStyle(Color(nsColor: .separatorColor))
         )
     }
 }

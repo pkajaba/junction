@@ -23,8 +23,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             andEventID: AEEventID(kAEGetURL)
         )
 
-        // Load persisted rules and start watching rules.json for external edits.
+        // Apply the saved appearance preference (System / Light / Dark)
+        // before windows draw, and load persisted rules.
         Task { @MainActor in
+            AppearanceSettings.shared.apply()
             RuleStore.shared.startup()
         }
     }
