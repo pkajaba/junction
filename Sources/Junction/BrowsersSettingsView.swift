@@ -9,10 +9,13 @@ import AppKit
 struct BrowsersSettingsView: View {
 
     @ObservedObject private var hideList = BrowserHideList.shared
+    @ObservedObject private var extraList = BrowserExtraList.shared
 
-    /// Snapshot taken on appear; we don't need this to be reactive — the
-    /// user can re-open Settings to refresh, and detection is fast.
+    /// Snapshots taken on appear; detection is fast and the user can
+    /// hit Refresh. `allBrowsers` is the recognized set; `otherApps` is
+    /// the unrecognized `http` handlers offered under "Other apps".
     @State private var allBrowsers: [DetectedBrowser] = []
+    @State private var otherApps: [DetectedBrowser] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -46,18 +49,40 @@ struct BrowsersSettingsView: View {
 
     @ViewBuilder
     private var list: some View {
-        if allBrowsers.isEmpty {
+        if allBrowsers.isEmpty && otherApps.isEmpty {
             empty
         } else {
             List {
-                ForEach(allBrowsers) { browser in
-                    BrowserRow(
-                        browser: browser,
-                        isVisible: Binding(
-                            get: { !hideList.isHidden(browser.bundleID) },
-                            set: { hideList.setHidden(browser.bundleID, hidden: !$0) }
+                Section("Browsers") {
+                    ForEach(allBrowsers) { browser in
+                        BrowserRow(
+                            browser: browser,
+                            isVisible: Binding(
+                                get: { !hideList.isHidden(browser.bundleID) },
+                                set: { hideList.setHidden(browser.bundleID, hidden: !$0) }
+                            )
                         )
-                    )
+                    }
+                }
+
+                if !otherApps.isEmpty {
+                    Section {
+                        ForEach(otherApps) { app in
+                            BrowserRow(
+                                browser: app,
+                                isVisible: Binding(
+                                    get: { extraList.isEnabled(app.bundleID) },
+                                    set: { extraList.setEnabled(app.bundleID, enabled: $0) }
+                                )
+                            )
+                        }
+                    } header: {
+                        Text("Other apps")
+                    } footer: {
+                        Text("Apps that can open links but aren't on Junction's known-browser list. Turn one on if it's a real browser Junction didn't recognize.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .listStyle(.inset(alternatesRowBackgrounds: true))
@@ -69,9 +94,9 @@ struct BrowsersSettingsView: View {
             Image(systemName: "questionmark.app.dashed")
                 .font(.system(size: 32))
                 .foregroundStyle(.tertiary)
-            Text("No recognized browsers detected")
+            Text("No apps can open links")
                 .font(.headline)
-            Text("Junction looks for a hardcoded set of known browser bundle IDs.\nIf you have one installed that isn't recognized, open an issue.")
+            Text("Nothing on this Mac is registered as an http handler — unusual. Try Refresh.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -82,6 +107,7 @@ struct BrowsersSettingsView: View {
 
     private func refresh() {
         allBrowsers = BrowserDetector.shared.detectAll()
+        otherApps = BrowserDetector.shared.detectUnrecognized()
     }
 }
 

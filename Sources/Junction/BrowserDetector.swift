@@ -8,8 +8,10 @@ import Foundation
 /// picker filling up with apps like Discord and Slack that register as
 /// `http` handlers only so OAuth deep-links work.
 ///
-/// The allowlist lives here for now. Settings (M5) will let the user toggle
-/// unrecognized apps in, and toggle recognized ones out.
+/// "Recognized" = the built-in `knownBrowserBundleIDs` allowlist **plus**
+/// anything the user promoted via `BrowserExtraList` (Settings → Browsers →
+/// "Other apps"). That keeps non-browsers out by default while still
+/// letting the user surface a real browser Junction doesn't know yet.
 @MainActor
 final class BrowserDetector {
 
@@ -64,12 +66,38 @@ final class BrowserDetector {
         detectAll().filter { !BrowserHideList.shared.isHidden($0.bundleID) }
     }
 
-    /// All recognized browsers, ignoring the hide list. Used by the
-    /// Browsers settings tab to show *everything* with toggles, and by
-    /// the rule editor's browser picker (a rule can target a hidden
-    /// browser — we just won't surface it in the picker UI).
+    /// All recognized browsers (allowlist ∪ user-promoted), ignoring the
+    /// hide list. Used by the Browsers settings tab and the rule editor's
+    /// browser picker.
     func detectAll() -> [DetectedBrowser] {
-        // Probe URL: any http URL works — we just want the list of registered handlers.
+        let recognized = recognizedBundleIDs()
+        return rawHTTPHandlers()
+            .filter { recognized.contains($0.bundleID) }
+            .sorted(by: Self.browserSort)
+    }
+
+    /// `http`-handler apps that are **not** recognized as browsers —
+    /// neither on the built-in allowlist nor user-promoted. Settings →
+    /// Browsers surfaces these under "Other apps" so the user can promote
+    /// a genuine browser Junction doesn't know about yet (issue #24).
+    func detectUnrecognized() -> [DetectedBrowser] {
+        let recognized = recognizedBundleIDs()
+        return rawHTTPHandlers()
+            .filter { !recognized.contains($0.bundleID) }
+            .sorted(by: Self.browserSort)
+    }
+
+    // MARK: - Private
+
+    /// Allowlist plus anything the user promoted via `BrowserExtraList`.
+    private func recognizedBundleIDs() -> Set<String> {
+        Self.knownBrowserBundleIDs.union(BrowserExtraList.shared.enabled)
+    }
+
+    /// Every `http`-handler app on this Mac, deduped, excluding Junction
+    /// itself (listing ourselves would create an open-URL loop). No
+    /// allowlist filter — callers pick the subset they want.
+    private func rawHTTPHandlers() -> [DetectedBrowser] {
         guard let probe = URL(string: "https://example.com") else { return [] }
 
         let appURLs = NSWorkspace.shared.urlsForApplications(toOpen: probe)
@@ -82,12 +110,8 @@ final class BrowserDetector {
                 let bundleID = bundle.bundleIdentifier
             else { continue }
 
-            // Never list ourselves — would cause an open-URL loop.
             if bundleID == "com.pkajaba.junction" { continue }
-            // Allowlist: only recognized browsers.
-            guard Self.knownBrowserBundleIDs.contains(bundleID) else { continue }
-            // Dedupe (Launch Services occasionally returns duplicate paths).
-            guard !seen.contains(bundleID) else { continue }
+            guard !seen.contains(bundleID) else { continue }   // dedupe
             seen.insert(bundleID)
 
             let name = FileManager.default
@@ -100,11 +124,14 @@ final class BrowserDetector {
                 appURL: appURL
             ))
         }
+        return result
+    }
 
-        return result.sorted { a, b in
-            if a.bundleID == "com.apple.Safari" { return true }
-            if b.bundleID == "com.apple.Safari" { return false }
-            return a.displayName.localizedCaseInsensitiveCompare(b.displayName) == .orderedAscending
-        }
+    /// Sort: Safari first (macOS default, likely "personal" target),
+    /// then case-insensitive alphabetical.
+    private static func browserSort(_ lhs: DetectedBrowser, _ rhs: DetectedBrowser) -> Bool {
+        if lhs.bundleID == "com.apple.Safari" { return true }
+        if rhs.bundleID == "com.apple.Safari" { return false }
+        return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
     }
 }
