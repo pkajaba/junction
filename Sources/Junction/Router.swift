@@ -17,7 +17,11 @@ final class Router {
     private init() {}
 
     /// Entry point for every received URL.
-    func route(_ url: URL, entryID: UUID) {
+    ///
+    /// - Parameter sourceApp: bundle ID of the app the URL was opened from
+    ///   (see `AppDelegate.openerBundleID()`), or `nil` if unknown. Used by
+    ///   source-app rules ("links from Slack → Chrome").
+    func route(_ url: URL, sourceApp: String? = nil, entryID: UUID) {
         guard isRoutableScheme(url) else {
             URLLog.shared.updateRouting(for: entryID, to: .unsupported)
             return
@@ -41,7 +45,11 @@ final class Router {
         }
 
         // 1. Rule match → silent route.
-        if let rule = RuleEvaluator.evaluate(cleanedURL, against: RuleStore.shared.rules) {
+        if let rule = RuleEvaluator.evaluate(
+            cleanedURL,
+            sourceApp: sourceApp,
+            against: RuleStore.shared.rules
+        ) {
             open(
                 url: cleanedURL,
                 target: rule.target,

@@ -6,9 +6,23 @@ import Foundation
 struct RuleEvaluator {
 
     /// Returns the rule that matched, or `nil` if no enabled rule matches.
+    ///
+    /// Convenience overload for callers that don't track the opener app —
+    /// equivalent to "the link came from an unknown source".
     static func evaluate(_ url: URL, against rules: [Rule]) -> Rule? {
+        evaluate(url, sourceApp: nil, against: rules)
+    }
+
+    /// Returns the first enabled rule whose URL matcher **and** source-app
+    /// condition both pass, or `nil` if none match.
+    ///
+    /// - Parameter sourceApp: bundle ID of the app the URL was opened from,
+    ///   or `nil` if unknown. A rule with `sourceApp == nil` matches any
+    ///   source; a rule with a specific `sourceApp` only matches when it
+    ///   equals this argument.
+    static func evaluate(_ url: URL, sourceApp: String?, against rules: [Rule]) -> Rule? {
         for rule in rules where rule.enabled {
-            if matches(url, rule.match) {
+            if matches(url, rule.match), sourceMatches(rule.sourceApp, sourceApp) {
                 return rule
             }
         }
@@ -25,7 +39,17 @@ struct RuleEvaluator {
             return hostMatchesRegex(url.host, pattern: pattern)
         case .urlContains(let substring):
             return url.absoluteString.range(of: substring, options: .caseInsensitive) != nil
+        case .any:
+            return true
         }
+    }
+
+    /// A rule's source-app condition. `nil` on the rule means "any source"
+    /// and always passes. Otherwise the rule's required bundle ID must
+    /// equal the actual opener.
+    static func sourceMatches(_ ruleSourceApp: String?, _ actual: String?) -> Bool {
+        guard let required = ruleSourceApp else { return true }
+        return required == actual
     }
 
     /// `pattern` matches `host` exactly OR is a parent domain of `host`.
