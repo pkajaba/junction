@@ -134,44 +134,64 @@ struct PickerView: View {
 
     // MARK: - List
 
+    /// Above this row count we switch to a `ScrollView`-backed list with a
+    /// max height. Below it the natural VStack is used as-is — a bare
+    /// ScrollView in our borderless, size-to-content window collapses to
+    /// ~0 pt because nothing in the chain hands it a definite vertical
+    /// size to work with.
+    private static let scrollThreshold = 8
+
     @ViewBuilder
     private var list: some View {
         if browsers.isEmpty {
             emptyState
+        } else if browsers.count > Self.scrollThreshold {
+            scrollableRows
         } else {
-            // Capped, scrollable list. With a handful of browsers it sizes
-            // naturally (no scroll); with 10+ it stays on-screen and the
-            // selection is kept visible as the user arrows through.
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(spacing: 4) {
-                        ForEach(Array(browsers.enumerated()), id: \.element.bundleID) { index, browser in
-                            PickerRow(
-                                browser: browser,
-                                number: index + 1,
-                                isSelected: index == selectedIndex,
-                                isDefault: index == 0,
-                                onTap: {
-                                    selectedIndex = index
-                                    commitSelected()
-                                },
-                                onPin: {
-                                    // Pin = "always": open here AND save a host rule.
-                                    onResolve(.pickedAlways(browser))
-                                }
-                            )
-                        }
+            rowsStack
+        }
+    }
+
+    /// The shared row stack. Used directly for short lists (so it can
+    /// report its intrinsic height to the window) and wrapped in a
+    /// ScrollView for long ones.
+    private var rowsStack: some View {
+        VStack(spacing: 4) {
+            ForEach(Array(browsers.enumerated()), id: \.element.bundleID) { index, browser in
+                PickerRow(
+                    browser: browser,
+                    number: index + 1,
+                    isSelected: index == selectedIndex,
+                    isDefault: index == 0,
+                    onTap: {
+                        selectedIndex = index
+                        commitSelected()
+                    },
+                    onPin: {
+                        // Pin = "always": open here AND save a host rule.
+                        onResolve(.pickedAlways(browser))
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.top, 10)
-                    .padding(.bottom, 14)
-                }
-                .frame(maxHeight: 380)
-                .scrollBounceBehavior(.basedOnSize)
-                .onChange(of: selectedIndex) { _, newIndex in
-                    guard browsers.indices.contains(newIndex) else { return }
-                    proxy.scrollTo(browsers[newIndex].bundleID, anchor: .center)
-                }
+                )
+                .id(browser.bundleID)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 10)
+        .padding(.bottom, 14)
+    }
+
+    /// Capped, scrollable list for users with 9+ browsers. Selection
+    /// stays in view as the user arrows through.
+    private var scrollableRows: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                rowsStack
+            }
+            .frame(maxHeight: 380)
+            .scrollBounceBehavior(.basedOnSize)
+            .onChange(of: selectedIndex) { _, newIndex in
+                guard browsers.indices.contains(newIndex) else { return }
+                proxy.scrollTo(browsers[newIndex].bundleID, anchor: .center)
             }
         }
     }
