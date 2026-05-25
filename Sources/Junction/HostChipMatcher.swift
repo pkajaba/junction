@@ -30,6 +30,10 @@ enum HostChipMatcher {
             return parseHostListRegex(regex)
         case .urlContains:
             return nil
+        case .any:
+            // No host constraint — an empty chip list. Used by source-app
+            // rules ("everything from Slack → Chrome").
+            return Chips(hosts: [], includeSubdomains: true)
         }
     }
 
@@ -39,9 +43,10 @@ enum HostChipMatcher {
     static func matcher(from chips: Chips) -> Matcher {
         let hosts = chips.hosts.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         guard !hosts.isEmpty else {
-            // Empty chip list — fall back to a regex that matches nothing.
-            // The editor's validation should keep this from being saved.
-            return .hostRegex("$.^")
+            // Empty chip list — no URL constraint. Becomes `.any`, which
+            // is only meaningful when paired with a `sourceApp` condition;
+            // the editor's validation rejects a rule with neither.
+            return .any
         }
 
         if hosts.count == 1, chips.includeSubdomains {

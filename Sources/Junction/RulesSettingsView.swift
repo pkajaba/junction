@@ -251,6 +251,7 @@ struct RulesSettingsView: View {
         case .host(let v):        return v
         case .hostRegex(let v):   return v
         case .urlContains(let v): return v
+        case .any:                return "any URL"
         }
     }
 
@@ -375,11 +376,17 @@ private struct RuleRow: View {
     }
 
     private var matcherSummary: String {
+        let urlPart: String
         switch rule.match {
-        case .host(let v):        return v.isEmpty ? "—" : v
-        case .hostRegex(let v):   return v
-        case .urlContains(let v): return "contains: \(v)"
+        case .host(let v):        urlPart = v.isEmpty ? "—" : v
+        case .hostRegex(let v):   urlPart = v
+        case .urlContains(let v): urlPart = "contains: \(v)"
+        case .any:                urlPart = "any URL"
         }
+        if let source = rule.sourceApp, !source.isEmpty {
+            return "\(urlPart)  ·  from \(SourceAppList.displayName(for: source))"
+        }
+        return urlPart
     }
 }
 

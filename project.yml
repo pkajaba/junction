@@ -89,6 +89,11 @@ targets:
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/Junction.app/Contents/MacOS/Junction
         # Tests don't need the @main app's hardened runtime constraints.
         ENABLE_HARDENED_RUNTIME: NO
+        # Override the project-wide GENERATE_INFOPLIST_FILE=NO: the app
+        # has a custom Info.plist, but the test bundle just needs the
+        # auto-generated one. Without this, recent Xcode refuses to sign
+        # the test bundle.
+        GENERATE_INFOPLIST_FILE: YES
 
 schemes:
   Junction:

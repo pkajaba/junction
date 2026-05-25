@@ -8,18 +8,28 @@ struct Rule: Codable, Identifiable, Equatable {
     var match: Matcher
     var target: Target
 
+    /// Optional bundle ID of the app the link must come *from* for this
+    /// rule to apply (e.g. `"com.tinyspeck.slackmacgap"` → "links from
+    /// Slack"). `nil` means the rule fires regardless of the opener app.
+    ///
+    /// Backward-compatible: the key is decoded with `decodeIfPresent`, so
+    /// rules saved before this field existed load fine as `nil`.
+    var sourceApp: String?
+
     init(
         id: UUID = UUID(),
         name: String,
         enabled: Bool = true,
         match: Matcher,
-        target: Target
+        target: Target,
+        sourceApp: String? = nil
     ) {
         self.id = id
         self.name = name
         self.enabled = enabled
         self.match = match
         self.target = target
+        self.sourceApp = sourceApp
     }
 }
 
@@ -34,10 +44,13 @@ struct Rule: Codable, Identifiable, Equatable {
 ///   URL's host. Power tool — use when `.host` isn't expressive enough.
 /// - `.urlContains("/issues/")` matches if the substring appears anywhere in
 ///   the full URL string. Useful for path-based rules.
+/// - `.any` matches every URL. Used by source-app-only rules ("everything
+///   from Slack → Chrome") where the URL pattern is irrelevant.
 enum Matcher: Equatable {
     case host(String)
     case hostRegex(String)
     case urlContains(String)
+    case any
 }
 
 /// Where a matched URL should be opened.
@@ -72,16 +85,22 @@ extension Matcher: Codable {
         case host
         case hostRegex
         case urlContains
+        case any
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let kind = try container.decode(Kind.self, forKey: .type)
+        if kind == .any {
+            self = .any
+            return
+        }
         let value = try container.decode(String.self, forKey: .value)
         switch kind {
         case .host:        self = .host(value)
         case .hostRegex:   self = .hostRegex(value)
         case .urlContains: self = .urlContains(value)
+        case .any:         self = .any   // unreachable; handled above
         }
     }
 
@@ -97,6 +116,8 @@ extension Matcher: Codable {
         case .urlContains(let value):
             try container.encode(Kind.urlContains, forKey: .type)
             try container.encode(value, forKey: .value)
+        case .any:
+            try container.encode(Kind.any, forKey: .type)
         }
     }
 }

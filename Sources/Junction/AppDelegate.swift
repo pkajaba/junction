@@ -37,10 +37,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// when the user clicks a link in another app and Junction is the
     /// registered default browser.
     func application(_ application: NSApplication, open urls: [URL]) {
+        let sourceApp = Self.openerBundleID()
         for url in urls {
             Task { @MainActor in
                 let id = URLLog.shared.append(url, source: .openURLs)
-                Router.shared.route(url, entryID: id)
+                Router.shared.route(url, sourceApp: sourceApp, entryID: id)
             }
         }
     }
@@ -58,9 +59,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let url = URL(string: urlString)
         else { return }
 
+        let sourceApp = Self.openerBundleID()
         Task { @MainActor in
             let id = URLLog.shared.append(url, source: .appleEvent)
-            Router.shared.route(url, entryID: id)
+            Router.shared.route(url, sourceApp: sourceApp, entryID: id)
         }
+    }
+
+    // MARK: - Source-app detection
+
+    /// Best-effort bundle ID of the app the URL was opened *from*.
+    ///
+    /// When macOS hands Junction a URL, the click's originating app is
+    /// still the frontmost process — Junction is a background agent and
+    /// doesn't steal focus to receive a URL. So `frontmostApplication`
+    /// is a reliable opener heuristic. If it somehow reads back as
+    /// Junction itself (defensive), we return `nil` = "unknown source".
+    static func openerBundleID() -> String? {
+        guard let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
+              bundleID != "com.pkajaba.junction"
+        else { return nil }
+        return bundleID
     }
 }
