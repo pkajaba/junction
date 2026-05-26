@@ -33,6 +33,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Install build tooling BEFORE CodeQL init. CodeQL's tracer injects
+      # an x86_64 `libtrace.dylib` into every subprocess, which makes brew
+      # think it's running under Rosetta 2 and refuse to write to the ARM
+      # default prefix at /opt/homebrew. Doing brew first keeps it native.
+      - name: Install build tooling
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
@@ -40,12 +50,6 @@ jobs:
           # Default query suite is "security-extended"; covers the OWASP-relevant
           # checks for Swift.
           queries: security-extended
-
-      - name: Install build tooling
-        run: brew install xcodegen
-
-      - name: Generate Xcode project
-        run: xcodegen generate
 
       - name: Build for CodeQL
         run: |
