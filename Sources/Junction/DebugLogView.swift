@@ -1,12 +1,17 @@
 import SwiftUI
 
-/// The single window shown by Junction at M1–M4.
+/// Activity tab of the Settings window.
 ///
-/// Shows every URL we've received, newest first, with the time, which code
-/// path delivered it, and the routing outcome (with reason: rule name or
-/// picker). Empty state tells the user how to get URLs to appear.
+/// Shows every URL Junction has received, newest first, with the time,
+/// which code path delivered it, and the routing outcome (rule name,
+/// picker, handoff). Used to live in its own window pre-menu-bar; now
+/// folds into Settings so the app has a single visible surface.
 struct DebugLogView: View {
-    @EnvironmentObject private var log: URLLog
+    // URLLog.shared is the canonical, app-wide instance — observed
+    // directly rather than handed in via `.environmentObject(…)` so the
+    // tab works standalone inside the Settings TabView with no scene
+    // plumbing.
+    @ObservedObject private var log = URLLog.shared
     @ObservedObject private var ruleStore = RuleStore.shared
 
     var body: some View {
@@ -190,12 +195,10 @@ private struct EntryRow: View {
     log.updateRouting(for: id5, to: .unsupported)
     log.updateRouting(for: id6, to: .cancelled)
     return DebugLogView()
-        .environmentObject(log)
         .frame(width: 680, height: 420)
 }
 
 #Preview("Empty") {
     DebugLogView()
-        .environmentObject(URLLog.shared)
         .frame(width: 680, height: 420)
 }

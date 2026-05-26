@@ -3,45 +3,34 @@ import AppKit
 
 /// Entry point for the Junction app.
 ///
-/// M5 scope: full Settings UI (Rules + Browsers), live reload of
-/// `rules.json` from external edits, and the picker's "Always for this
-/// domain" affordance via Option-modifier.
+/// Junction is a menu-bar agent (`LSUIElement = true` in Info.plist) — no
+/// Dock icon, no app-switcher entry. The visible surfaces are:
+///
+/// 1. **The status item** (`MenuBarController`, owned by `AppDelegate`) —
+///    the persistent affordance for opening Settings and quitting.
+/// 2. **The picker window** — borderless, on demand, when a URL has no
+///    matching rule.
+/// 3. **The Settings window** — standard `Settings` scene, opened from
+///    the status menu or ⌘, while Settings is key.
+///
+/// There's no `WindowGroup` on purpose: the Debug Log is now an "Activity"
+/// tab inside Settings, so the app has a single, predictable settings
+/// surface instead of a separate window the user has to track.
 @main
 struct JunctionApp: App {
     /// Bridge to AppKit so we can hook into URL events at the application
     /// level (rather than only when a window happens to be foregrounded).
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
-    /// Shared, app-wide log of URLs Junction has received since launch.
-    /// Singleton because the URL-receiving path (`AppDelegate`, Apple Event
-    /// handlers) needs to reach it from outside the SwiftUI view graph.
-    @StateObject private var log = URLLog.shared
-
     var body: some Scene {
-        WindowGroup("Junction — Debug Log", id: "debug") {
-            DebugLogView()
-                .environmentObject(log)
-                .frame(minWidth: 580, minHeight: 420)
-        }
-        .windowResizability(.contentMinSize)
-        .commands {
-            CommandGroup(replacing: .newItem) {}
-            CommandGroup(after: .appInfo) {
-                Button("Clear Log") { log.clear() }
-                    .keyboardShortcut(.delete, modifiers: [.command, .shift])
-                    .disabled(log.entries.isEmpty)
-                Divider()
-                Button("Reload Rules") { RuleStore.shared.load() }
-                    .keyboardShortcut("r", modifiers: [.command, .option])
-                Button("Reveal rules.json in Finder") {
-                    NSWorkspace.shared.activateFileViewerSelecting([RuleStore.storeURL])
-                }
-            }
-        }
-
-        // Standard macOS Settings window — accessible via ⌘, or "Junction → Settings…"
+        // SwiftUI's `App.body` must return at least one Scene. The
+        // Settings window itself is presented imperatively by
+        // `SettingsWindowController` from the menu-bar item — see that
+        // file for why we don't use SwiftUI's `Settings { ... }` scene.
+        // `EmptyView` satisfies the requirement without adding any
+        // window of its own.
         Settings {
-            SettingsScene()
+            EmptyView()
         }
     }
 }
