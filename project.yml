@@ -46,6 +46,12 @@ targets:
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         NSHumanReadableCopyright: "Copyright © 2026 Pavel Kajaba. MIT license."
         LSApplicationCategoryType: public.app-category.utilities
+        # Junction runs as a menu-bar agent: no Dock icon, no app-switcher
+        # entry. The status item is the only persistent UI; Settings opens
+        # on demand. Critical for a router that's "always running but
+        # rarely interacted with" — users shouldn't see it in cmd-tab or
+        # accidentally Cmd-Q it.
+        LSUIElement: true
         # Register as a handler for http and https URL schemes — this is what
         # lets macOS route link clicks to Junction once you set it as default.
         CFBundleURLTypes:

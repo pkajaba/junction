@@ -24,10 +24,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         // Apply the saved appearance preference (System / Light / Dark)
-        // before windows draw, and load persisted rules.
+        // before windows draw, load persisted rules, and stand up the
+        // menu-bar item — Junction's only persistent UI now that the
+        // app is `LSUIElement`.
         Task { @MainActor in
             AppearanceSettings.shared.apply()
             RuleStore.shared.startup()
+            _ = MenuBarController.shared
         }
     }
 
