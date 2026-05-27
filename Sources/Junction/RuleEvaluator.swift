@@ -39,6 +39,12 @@ struct RuleEvaluator {
             return hostMatchesRegex(url.host, pattern: pattern)
         case .urlContains(let substring):
             return url.absoluteString.range(of: substring, options: .caseInsensitive) != nil
+        case .urlPrefix(let prefix):
+            // Case-insensitive prefix match on the full URL string. Lower-
+            // case both sides; `hasPrefix` doesn't have a case-insensitive
+            // variant on String. Anchored to the start — won't false-
+            // match URLs that mention the prefix mid-string.
+            return url.absoluteString.lowercased().hasPrefix(prefix.lowercased())
         case .any:
             return true
         }

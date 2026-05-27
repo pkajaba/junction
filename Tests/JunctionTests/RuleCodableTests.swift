@@ -136,6 +136,20 @@ final class RuleCodableTests: XCTestCase {
         XCTAssertEqual(json?["value"], "/issues/")
     }
 
+    func test_matcher_urlPrefix_jsonShape() throws {
+        let data = try JSONEncoder().encode(Matcher.urlPrefix("https://github.com/NBT/"))
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: String]
+        XCTAssertEqual(json?["type"], "urlPrefix")
+        XCTAssertEqual(json?["value"], "https://github.com/NBT/")
+    }
+
+    func test_matcher_urlPrefix_roundTrip() throws {
+        let original = Matcher.urlPrefix("https://gitlab.com/work/")
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(Matcher.self, from: data)
+        XCTAssertEqual(decoded, original)
+    }
+
     /// Unknown matcher type should error cleanly rather than crash. Users
     /// editing rules.json by hand will mistype things; failure mode
     /// matters.

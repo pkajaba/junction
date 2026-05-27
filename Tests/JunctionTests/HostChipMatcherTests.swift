@@ -43,38 +43,62 @@ final class HostChipMatcherTests: XCTestCase {
         XCTAssertEqual(HostChipMatcher.chips(from: matcher), chips)
     }
 
-    // MARK: - normalizedHost
+    // MARK: - normalizeChip (path-preserving form)
 
-    func test_normalizedHost_bareHost_returnsItself() {
-        XCTAssertEqual(HostChipMatcher.normalizedHost(from: "github.com"), "github.com")
-        XCTAssertEqual(HostChipMatcher.normalizedHost(from: "  github.com  "), "github.com")
+    func test_normalizeChip_invalidInputs_returnNil() {
+        XCTAssertNil(HostChipMatcher.normalizeChip(from: ""))
+        XCTAssertNil(HostChipMatcher.normalizeChip(from: "   "))
+        XCTAssertNil(HostChipMatcher.normalizeChip(from: "not a host"))   // space → invalid
+        XCTAssertNil(HostChipMatcher.normalizeChip(from: "no-tld"))       // no dot
+        XCTAssertNil(HostChipMatcher.normalizeChip(from: "https://"))     // no host part
     }
 
-    func test_normalizedHost_fullURL_extractsHost() {
+    /// Pasting a URL with a real path keeps the path in the chip so we
+    /// can build a `.urlPrefix` matcher later. This was the bug behind
+    /// "github.com/NBTSolutions becomes just github.com".
+    func test_normalizeChip_urlWithPath_keepsPath() {
         XCTAssertEqual(
-            HostChipMatcher.normalizedHost(from: "https://github.com/NBTSolutions/foo?x=1"),
-            "github.com"
-        )
-        XCTAssertEqual(
-            HostChipMatcher.normalizedHost(from: "http://api.github.com/v3/repos"),
-            "api.github.com"
-        )
-    }
-
-    /// `example.com/path` (no scheme) is a common-enough mistype that
-    /// we still want to recover a host from it.
-    func test_normalizedHost_hostWithPathNoScheme_extractsHost() {
-        XCTAssertEqual(
-            HostChipMatcher.normalizedHost(from: "github.com/foo/bar"),
-            "github.com"
+            HostChipMatcher.normalizeChip(from: "https://github.com/NBTSolutions/foo"),
+            "github.com/NBTSolutions/foo"
         )
     }
 
-    func test_normalizedHost_invalidInputs_returnNil() {
-        XCTAssertNil(HostChipMatcher.normalizedHost(from: ""))
-        XCTAssertNil(HostChipMatcher.normalizedHost(from: "   "))
-        XCTAssertNil(HostChipMatcher.normalizedHost(from: "not a host"))   // space → invalid
-        XCTAssertNil(HostChipMatcher.normalizedHost(from: "no-tld"))       // no dot
-        XCTAssertNil(HostChipMatcher.normalizedHost(from: "https://"))     // no host part
+    /// A trailing `/` and an empty path are both "no real path" — we
+    /// strip them down to a plain host chip, matching the old behavior.
+    func test_normalizeChip_urlWithRootOrEmptyPath_isHostOnly() {
+        XCTAssertEqual(HostChipMatcher.normalizeChip(from: "https://github.com/"), "github.com")
+        XCTAssertEqual(HostChipMatcher.normalizeChip(from: "https://github.com"), "github.com")
+    }
+
+    func test_normalizeChip_bareHost_unchanged() {
+        XCTAssertEqual(HostChipMatcher.normalizeChip(from: "github.com"), "github.com")
+    }
+
+    // MARK: - matcher(from:) ⇄ chips(from:) for urlPrefix
+
+    func test_pathChip_buildsUrlPrefixMatcher() {
+        let chips = HostChipMatcher.Chips(hosts: ["github.com/NBTSolutions/"],
+                                          includeSubdomains: false)
+        XCTAssertEqual(
+            HostChipMatcher.matcher(from: chips),
+            .urlPrefix("https://github.com/NBTSolutions/")
+        )
+    }
+
+    func test_urlPrefixMatcher_projectsBackToSinglePathChip() {
+        let projected = HostChipMatcher.chips(from: .urlPrefix("https://github.com/NBT/"))
+        XCTAssertEqual(projected,
+                       HostChipMatcher.Chips(hosts: ["github.com/NBT/"],
+                                             includeSubdomains: false))
+    }
+
+    /// Mixing a path chip with host chips: the path chip wins (MVP).
+    func test_mixedHostAndPathChips_useUrlPrefixOfFirstPath() {
+        let chips = HostChipMatcher.Chips(hosts: ["example.com", "github.com/NBT/"],
+                                          includeSubdomains: true)
+        XCTAssertEqual(
+            HostChipMatcher.matcher(from: chips),
+            .urlPrefix("https://github.com/NBT/")
+        )
     }
 }

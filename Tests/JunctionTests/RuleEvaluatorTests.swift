@@ -116,6 +116,30 @@ final class RuleEvaluatorTests: XCTestCase {
         XCTAssertNil(RuleEvaluator.evaluate(url, against: []))
     }
 
+    // MARK: - URL prefix matcher
+
+    func test_urlPrefix_matchesExactPrefix() {
+        let url = URL(string: "https://github.com/NBTSolutions/foo")!
+        XCTAssertTrue(RuleEvaluator.matches(url, .urlPrefix("https://github.com/NBTSolutions/")))
+    }
+
+    func test_urlPrefix_caseInsensitive() {
+        let url = URL(string: "https://GitHub.com/NBTSolutions/Foo")!
+        XCTAssertTrue(RuleEvaluator.matches(url, .urlPrefix("https://github.com/nbtsolutions/")))
+    }
+
+    /// Anchoring is the whole point — a substring elsewhere in the URL
+    /// shouldn't fire the rule.
+    func test_urlPrefix_isAnchored_doesNotMatchMidString() {
+        let url = URL(string: "https://example.com/?ref=https://github.com/NBTSolutions/")!
+        XCTAssertFalse(RuleEvaluator.matches(url, .urlPrefix("https://github.com/NBTSolutions/")))
+    }
+
+    func test_urlPrefix_differentOrgDoesNotMatch() {
+        let url = URL(string: "https://github.com/Apple/swift")!
+        XCTAssertFalse(RuleEvaluator.matches(url, .urlPrefix("https://github.com/NBTSolutions/")))
+    }
+
     // MARK: - Any matcher
 
     func test_any_matchesEverything() {
