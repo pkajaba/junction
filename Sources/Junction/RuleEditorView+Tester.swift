@@ -13,10 +13,12 @@ extension RuleEditorView {
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 12.5, design: .monospaced))
                 testerResult
-                if let source = rule.sourceApp, !source.isEmpty {
+                if !rule.sourceApps.isEmpty {
+                    let names = rule.sourceApps.map(SourceAppList.displayName(for:))
+                    let formatted = ListFormatter.localizedString(byJoining: names)
                     Label {
                         Text("This tester checks the URL only — the rule also "
-                             + "requires the link to come from \(SourceAppList.displayName(for: source)).")
+                             + "requires the link to come from \(formatted).")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)

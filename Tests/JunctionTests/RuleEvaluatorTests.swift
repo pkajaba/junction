@@ -127,23 +127,32 @@ final class RuleEvaluatorTests: XCTestCase {
     // MARK: - Source-app matching
 
     private let slack = "com.tinyspeck.slackmacgap"
+    private let teams = "com.microsoft.teams2"
     private let mail = "com.apple.mail"
 
-    func test_sourceMatches_nilRuleAcceptsAnySource() {
-        XCTAssertTrue(RuleEvaluator.sourceMatches(nil, slack))
-        XCTAssertTrue(RuleEvaluator.sourceMatches(nil, nil))
+    func test_sourceMatches_emptyRuleAcceptsAnySource() {
+        XCTAssertTrue(RuleEvaluator.sourceMatches([], slack))
+        XCTAssertTrue(RuleEvaluator.sourceMatches([], nil))
     }
 
-    func test_sourceMatches_specificRuleRequiresEqualSource() {
-        XCTAssertTrue(RuleEvaluator.sourceMatches(slack, slack))
-        XCTAssertFalse(RuleEvaluator.sourceMatches(slack, mail))
-        XCTAssertFalse(RuleEvaluator.sourceMatches(slack, nil))
+    func test_sourceMatches_singleAppRuleRequiresEqualSource() {
+        XCTAssertTrue(RuleEvaluator.sourceMatches([slack], slack))
+        XCTAssertFalse(RuleEvaluator.sourceMatches([slack], mail))
+        XCTAssertFalse(RuleEvaluator.sourceMatches([slack], nil))
+    }
+
+    /// Multiple source apps is logical OR — link from any of them passes.
+    func test_sourceMatches_multipleAppsAcceptAnyMatch() {
+        XCTAssertTrue(RuleEvaluator.sourceMatches([slack, teams], slack))
+        XCTAssertTrue(RuleEvaluator.sourceMatches([slack, teams], teams))
+        XCTAssertFalse(RuleEvaluator.sourceMatches([slack, teams], mail))
+        XCTAssertFalse(RuleEvaluator.sourceMatches([slack, teams], nil))
     }
 
     func test_evaluate_sourceAppRuleMatchesWhenSourceEquals() {
         let rule = Rule(name: "from Slack", match: .any,
                         target: Target(browserBundleID: "com.google.Chrome"),
-                        sourceApp: slack)
+                        sourceApps: [slack])
         let url = URL(string: "https://example.com")!
         XCTAssertEqual(
             RuleEvaluator.evaluate(url, sourceApp: slack, against: [rule])?.name,
@@ -151,20 +160,32 @@ final class RuleEvaluatorTests: XCTestCase {
         )
     }
 
+    /// Multi-source rule fires for *any* of its listed sources.
+    func test_evaluate_multipleSourceAppRuleFiresForAnyListedSource() {
+        let rule = Rule(name: "from Slack or Teams", match: .any,
+                        target: Target(browserBundleID: "com.google.Chrome"),
+                        sourceApps: [slack, teams])
+        let url = URL(string: "https://example.com")!
+        XCTAssertNotNil(RuleEvaluator.evaluate(url, sourceApp: slack, against: [rule]))
+        XCTAssertNotNil(RuleEvaluator.evaluate(url, sourceApp: teams, against: [rule]))
+        XCTAssertNil(RuleEvaluator.evaluate(url, sourceApp: mail, against: [rule]))
+        XCTAssertNil(RuleEvaluator.evaluate(url, sourceApp: nil, against: [rule]))
+    }
+
     func test_evaluate_sourceAppRuleSkippedWhenSourceDiffersOrUnknown() {
         let rule = Rule(name: "from Slack", match: .any,
                         target: Target(browserBundleID: "com.google.Chrome"),
-                        sourceApp: slack)
+                        sourceApps: [slack])
         let url = URL(string: "https://example.com")!
         XCTAssertNil(RuleEvaluator.evaluate(url, sourceApp: mail, against: [rule]))
         XCTAssertNil(RuleEvaluator.evaluate(url, sourceApp: nil, against: [rule]))
     }
 
-    /// A rule with both a host matcher and a source app requires *both*.
+    /// A rule with both a host matcher and source apps requires *both*.
     func test_evaluate_sourceAndHostBothRequired() {
         let rule = Rule(name: "github from Slack", match: .host("github.com"),
                         target: Target(browserBundleID: "com.google.Chrome"),
-                        sourceApp: slack)
+                        sourceApps: [slack])
         let github = URL(string: "https://github.com")!
         let other = URL(string: "https://example.com")!
         XCTAssertNotNil(RuleEvaluator.evaluate(github, sourceApp: slack, against: [rule]))
@@ -187,7 +208,7 @@ final class RuleEvaluatorTests: XCTestCase {
     func test_evaluate_specificSourceRulePrecedesGeneralRule() {
         let slackRule = Rule(name: "slack", match: .host("github.com"),
                              target: Target(browserBundleID: "work"),
-                             sourceApp: slack)
+                             sourceApps: [slack])
         let generalRule = Rule(name: "general", match: .host("github.com"),
                                target: Target(browserBundleID: "personal"))
         let url = URL(string: "https://github.com")!

@@ -50,25 +50,26 @@ final class RuleCodableTests: XCTestCase {
         XCTAssertEqual(original, decoded)
     }
 
-    func test_rule_withSourceApp_roundTrip() throws {
+    func test_rule_withMultipleSourceApps_roundTrip() throws {
         let original = Rule(
             id: UUID(),
-            name: "Slack → Chrome",
+            name: "Chat apps → Chrome",
             match: .any,
             target: Target(browserBundleID: "com.google.Chrome"),
-            sourceApp: "com.tinyspeck.slackmacgap"
+            sourceApps: ["com.tinyspeck.slackmacgap", "com.microsoft.teams2"]
         )
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(Rule.self, from: data)
         XCTAssertEqual(original, decoded)
-        XCTAssertEqual(decoded.sourceApp, "com.tinyspeck.slackmacgap")
+        XCTAssertEqual(decoded.sourceApps,
+                       ["com.tinyspeck.slackmacgap", "com.microsoft.teams2"])
         XCTAssertEqual(decoded.match, .any)
     }
 
-    /// Rules written before `sourceApp` existed must still load — the
-    /// field is optional, so an absent key decodes as nil. This is the
-    /// backward-compatibility guarantee for existing rules.json files.
-    func test_rule_legacyJSON_withoutSourceApp_decodesAsNil() throws {
+    /// Rules written before any source-app key existed (the original
+    /// rules.json schema) must still load — absent key decodes as an
+    /// empty `sourceApps` array.
+    func test_rule_legacyJSON_withoutSourceApp_decodesAsEmptyArray() throws {
         let json = Data("""
         {
           "id": "11111111-1111-1111-1111-111111111111",
@@ -83,9 +84,31 @@ final class RuleCodableTests: XCTestCase {
         }
         """.utf8)
         let decoded = try JSONDecoder().decode(Rule.self, from: json)
-        XCTAssertNil(decoded.sourceApp)
+        XCTAssertEqual(decoded.sourceApps, [])
         XCTAssertEqual(decoded.name, "Legacy")
         XCTAssertEqual(decoded.match, .host("github.com"))
+    }
+
+    /// Rules written by the first cut of source-app rules used a singular
+    /// `sourceApp` key. The decoder lifts that into a one-element
+    /// `sourceApps` array so nobody loses a saved rule.
+    func test_rule_legacyJSON_withSingularSourceApp_liftsToArray() throws {
+        let json = Data("""
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "name": "Old-shape Slack rule",
+          "enabled": true,
+          "match": { "type": "any" },
+          "target": {
+            "browserBundleID": "com.google.Chrome",
+            "extraArgs": [],
+            "openInNewWindow": false
+          },
+          "sourceApp": "com.tinyspeck.slackmacgap"
+        }
+        """.utf8)
+        let decoded = try JSONDecoder().decode(Rule.self, from: json)
+        XCTAssertEqual(decoded.sourceApps, ["com.tinyspeck.slackmacgap"])
     }
 
     // MARK: - Matcher discriminator shape

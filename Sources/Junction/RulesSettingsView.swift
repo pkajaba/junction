@@ -239,9 +239,23 @@ struct RulesSettingsView: View {
         let q = search.trimmingCharacters(in: .whitespaces).lowercased()
         guard !q.isEmpty else { return store.rules }
         return store.rules.filter { rule in
-            rule.name.lowercased().contains(q)
+            // Search the things the user can see on a rule row:
+            // - the rule's own name
+            // - the matcher's host/regex/contains string
+            // - the target browser by **display** name (so "google chrome"
+            //   works, not just "chrome" via the bundle ID) and bundle ID
+            // - source app display names + bundle IDs (so a "slack" search
+            //   surfaces "from Slack" rules)
+            let browserName = browserDisplayName(rule.target.browserBundleID).lowercased()
+            let sourceNames = rule.sourceApps
+                .map { SourceAppList.displayName(for: $0).lowercased() }
+            let sourceIDs = rule.sourceApps.map { $0.lowercased() }
+            return rule.name.lowercased().contains(q)
                 || matcherSummary(rule.match).lowercased().contains(q)
                 || rule.target.browserBundleID.lowercased().contains(q)
+                || browserName.contains(q)
+                || sourceNames.contains(where: { $0.contains(q) })
+                || sourceIDs.contains(where: { $0.contains(q) })
         }
     }
 
@@ -391,8 +405,9 @@ private struct RuleRow: View {
         case .urlContains(let v): urlPart = "contains: \(v)"
         case .any:                urlPart = "any URL"
         }
-        if let source = rule.sourceApp, !source.isEmpty {
-            return "\(urlPart)  ·  from \(SourceAppList.displayName(for: source))"
+        if !rule.sourceApps.isEmpty {
+            let names = rule.sourceApps.map(SourceAppList.displayName(for:))
+            return "\(urlPart)  ·  from \(ListFormatter.localizedString(byJoining: names))"
         }
         return urlPart
     }
