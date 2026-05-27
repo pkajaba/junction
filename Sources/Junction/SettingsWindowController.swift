@@ -27,6 +27,13 @@ final class SettingsWindowController {
         }
         guard let window else { return }
 
+        // Promote to a regular Dock-icon app while Settings is open. The
+        // user is actively interacting with a window, so showing it in
+        // the Dock reduces confusion ("did Junction quit? where is it?").
+        // We demote back to `.accessory` on window close — see
+        // `windowWillClose` notification handler below.
+        NSApp.setActivationPolicy(.regular)
+
         // LSUIElement apps stay backgrounded until explicitly activated.
         // The deprecated `ignoringOtherApps: true` variant is still the
         // only call that reliably steals focus from a frontmost app —
@@ -50,6 +57,20 @@ final class SettingsWindowController {
         // Show on every Space the user switches to, like other agent apps
         // (Bartender, Magnet). Falls back to the active Space if pinned.
         window.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace]
+
+        // Drop the Dock icon when the user closes the window so Junction
+        // goes back to its quiet menu-bar-only shape. Observer is scoped
+        // to this specific window — won't fire for picker windows.
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: window,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                NSApp.setActivationPolicy(.accessory)
+            }
+        }
+
         return window
     }
 }

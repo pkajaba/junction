@@ -136,7 +136,7 @@ struct RuleEditorView: View {
                     HStack(spacing: 6) {
                         Text("Include subdomains")
                             .font(.system(size: 12.5, weight: .medium))
-                        Text("— so `m.mail.google.com` matches too")
+                        Text(HostChipMatcher.subdomainHint(initialChips))
                             .font(.system(size: 12.5))
                             .foregroundStyle(.secondary)
                     }

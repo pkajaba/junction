@@ -25,7 +25,15 @@ struct RulesSettingsView: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             sidebar
-                .navigationSplitViewColumnWidth(min: 260, ideal: 320, max: 460)
+                // Belt-and-braces on the column width: the SwiftUI
+                // `navigationSplitViewColumnWidth` modifier alone isn't
+                // enforced when the Settings tab is hosted inside a manual
+                // `NSWindow` (rather than SwiftUI's `Settings { ... }`
+                // scene). A direct `.frame(minWidth:)` on the sidebar's
+                // VStack guarantees the column never collapses below
+                // something legible, regardless of split-view styling.
+                .frame(minWidth: 280, idealWidth: 320)
+                .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 460)
                 .toolbar(removing: .sidebarToggle)
         } detail: {
             detailPane
