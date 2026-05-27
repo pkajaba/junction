@@ -17,12 +17,12 @@ struct RuleEvaluator {
     /// condition both pass, or `nil` if none match.
     ///
     /// - Parameter sourceApp: bundle ID of the app the URL was opened from,
-    ///   or `nil` if unknown. A rule with `sourceApp == nil` matches any
-    ///   source; a rule with a specific `sourceApp` only matches when it
-    ///   equals this argument.
+    ///   or `nil` if unknown. A rule with an empty `sourceApps` matches
+    ///   any source; a rule with non-empty `sourceApps` only matches when
+    ///   `sourceApp` is one of them.
     static func evaluate(_ url: URL, sourceApp: String?, against rules: [Rule]) -> Rule? {
         for rule in rules where rule.enabled {
-            if matches(url, rule.match), sourceMatches(rule.sourceApp, sourceApp) {
+            if matches(url, rule.match), sourceMatches(rule.sourceApps, sourceApp) {
                 return rule
             }
         }
@@ -44,12 +44,14 @@ struct RuleEvaluator {
         }
     }
 
-    /// A rule's source-app condition. `nil` on the rule means "any source"
-    /// and always passes. Otherwise the rule's required bundle ID must
-    /// equal the actual opener.
-    static func sourceMatches(_ ruleSourceApp: String?, _ actual: String?) -> Bool {
-        guard let required = ruleSourceApp else { return true }
-        return required == actual
+    /// A rule's source-app condition. An empty `ruleSourceApps` means
+    /// "any source" and always passes. Otherwise `actual` must be one of
+    /// the listed bundle IDs (logical OR — links from any of these apps
+    /// route through this rule).
+    static func sourceMatches(_ ruleSourceApps: [String], _ actual: String?) -> Bool {
+        guard !ruleSourceApps.isEmpty else { return true }
+        guard let actual else { return false }
+        return ruleSourceApps.contains(actual)
     }
 
     /// `pattern` matches `host` exactly OR is a parent domain of `host`.

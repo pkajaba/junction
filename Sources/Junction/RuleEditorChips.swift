@@ -39,6 +39,114 @@ struct HostChipView: View {
     }
 }
 
+// MARK: - Source-app chip pill
+
+/// Chip representing one of a rule's source apps. Shows the app's real
+/// icon (or a placeholder when the app isn't on disk anymore), display
+/// name, and a remove button — mirrors `HostChipView` so the editor's
+/// host-chip and source-app rows look like the same control.
+struct SourceAppChipView: View {
+    let bundleID: String
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            icon
+            Text(SourceAppList.displayName(for: bundleID))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+            Button(action: onRemove) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 14, height: 14)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.leading, 6)
+        .padding(.trailing, 4)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+                .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
+        )
+    }
+
+    @ViewBuilder
+    private var icon: some View {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 14, height: 14)
+        } else {
+            // Fallback when the app isn't installed — keeps the row legible
+            // for rules referencing apps the user has since removed.
+            Image(systemName: "app.dashed")
+                .font(.system(size: 12))
+                .foregroundStyle(.tertiary)
+                .frame(width: 14, height: 14)
+        }
+    }
+}
+
+// MARK: - Add source-app menu
+
+/// Trailing "+" button beside the source-app chips. Tapping it opens a
+/// menu of running apps the user hasn't already added — running apps
+/// only, because that's the set the user can meaningfully name. (If they
+/// need a stopped app, they can launch it briefly and add it.)
+struct AddSourceAppMenu: View {
+    let apps: [SourceAppList.App]
+    let onPick: (String) -> Void
+
+    var body: some View {
+        Menu {
+            if apps.isEmpty {
+                Text("No more running apps")
+            } else {
+                ForEach(apps) { app in
+                    Button {
+                        onPick(app.bundleID)
+                    } label: {
+                        Text(app.displayName)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "plus")
+                    .font(.system(size: 10, weight: .semibold))
+                Text("Add app")
+                    .font(.system(size: 12))
+            }
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color.primary.opacity(0.04))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(
+                        style: StrokeStyle(lineWidth: 0.5, dash: [3, 3])
+                    )
+                    .foregroundStyle(Color(nsColor: .separatorColor))
+            )
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+}
+
 // MARK: - Add chip input
 
 struct AddChipField: View {

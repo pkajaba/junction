@@ -152,10 +152,10 @@ struct RuleEditorView: View {
     /// so the message adapts to whether one is set.
     @ViewBuilder
     private var emptyHostsHint: some View {
-        let hasSource = !(rule.sourceApp ?? "").isEmpty
+        let hasSource = !rule.sourceApps.isEmpty
         Label {
             Text(hasSource
-                 ? "No hosts — this rule matches every link from the app above."
+                 ? "No hosts — this rule matches every link from the source apps above."
                  : "No hosts and no \u{201C}From app\u{201D} — this rule would catch "
                    + "every link. Add a host, or pick a source app above.")
                 .font(.system(size: 11))
@@ -242,53 +242,19 @@ struct RuleEditorView: View {
         }
     }
 
-    // MARK: - Section: source app
+    // MARK: - Section: source apps
 
-    /// "Any app" plus every running regular app. If the rule already
-    /// references an app that isn't running, surface it too (flagged) so
-    /// the selection never silently disappears.
-    private var sourceAppOptions: [SourceAppList.App] {
-        var apps = runningApps
-        if let current = rule.sourceApp, !current.isEmpty,
-           !apps.contains(where: { $0.bundleID == current }) {
-            apps.insert(
-                SourceAppList.App(
-                    bundleID: current,
-                    displayName: SourceAppList.displayName(for: current) + " (not running)"
-                ),
-                at: 0
-            )
-        }
-        return apps
-    }
-
-    /// Bridges the optional `rule.sourceApp` to the Picker, which needs a
-    /// non-optional tag. Empty string is the "Any app" sentinel.
-    private var sourceAppBinding: Binding<String> {
-        Binding(
-            get: { rule.sourceApp ?? "" },
-            set: { rule.sourceApp = $0.isEmpty ? nil : $0 }
-        )
+    /// Apps not already on the rule that the user could add. Running
+    /// regular apps minus anything already chipped, sorted alphabetically.
+    private var addableSourceApps: [SourceAppList.App] {
+        runningApps.filter { !rule.sourceApps.contains($0.bundleID) }
     }
 
     private var sourceAppCard: some View {
         card {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("From app")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 64, alignment: .leading)
-                    Picker("", selection: sourceAppBinding) {
-                        Text("Any app").tag("")
-                        Divider()
-                        ForEach(sourceAppOptions) { app in
-                            Text(app.displayName).tag(app.bundleID)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                }
+            VStack(alignment: .leading, spacing: 10) {
+                sourceAppChipFlow
+
                 Text(sourceAppNote)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
@@ -297,16 +263,37 @@ struct RuleEditorView: View {
         }
     }
 
-    private var sourceAppNote: String {
-        if let source = rule.sourceApp, !source.isEmpty {
-            return "Only links opened from \(SourceAppList.displayName(for: source)) "
-                 + "match this rule. Junction uses the app that was frontmost when "
-                 + "the link was clicked — accurate for normal clicks, best-effort "
-                 + "for links delivered by background helpers."
+    /// Chip per selected source app + an "Add app" menu trailing them.
+    /// Mirrors the host chip flow above so the editor reads consistently:
+    /// "this set of hosts" / "from this set of apps".
+    private var sourceAppChipFlow: some View {
+        WrappingHStack(spacing: 6, lineSpacing: 6) {
+            ForEach(rule.sourceApps, id: \.self) { bundleID in
+                SourceAppChipView(bundleID: bundleID) {
+                    rule.sourceApps.removeAll { $0 == bundleID }
+                }
+            }
+            AddSourceAppMenu(apps: addableSourceApps) { picked in
+                if !rule.sourceApps.contains(picked) {
+                    rule.sourceApps.append(picked)
+                }
+            }
         }
-        return "The rule applies no matter which app the link came from. "
-             + "Pick an app to make it fire only for links opened from there "
-             + "(e.g. \u{201C}links from Slack \u{2192} Chrome\u{201D})."
+    }
+
+    private var sourceAppNote: String {
+        let apps = rule.sourceApps
+        if apps.isEmpty {
+            return "The rule applies no matter which app the link came from. "
+                 + "Add apps to make it fire only for links opened from those "
+                 + "(e.g. \u{201C}links from Slack or Teams \u{2192} Chrome\u{201D})."
+        }
+        let names = apps.map(SourceAppList.displayName(for:))
+        let formatted = ListFormatter.localizedString(byJoining: names)
+        return "Only links opened from \(formatted) match this rule. "
+             + "Junction uses the app that was frontmost when the link was "
+             + "clicked — accurate for normal clicks, best-effort for links "
+             + "delivered by background helpers."
     }
 
     // MARK: - Section B: target

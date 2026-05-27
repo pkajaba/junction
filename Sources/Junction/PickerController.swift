@@ -27,7 +27,7 @@ final class PickerController: NSObject {
 
     private var window: NSWindow?
     private var hostingController: NSHostingController<PickerView>?
-    private var dismissMonitor: Any?
+    private var resignKeyObserver: Any?
 
     private struct PendingRequest {
         let url: URL
@@ -89,22 +89,34 @@ final class PickerController: NSObject {
         self.window = window
         self.hostingController = hosting
 
-        // Click-outside dismisses. Local monitor catches our own windows;
-        // global catches anywhere else on the system.
-        dismissMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in
-            resolveOnce(.cancelled)
-        }
-
+        // Click-outside dismisses. We used to install a global mouse-down
+        // monitor (`NSEvent.addGlobalMonitorForEvents`) but those don't
+        // reliably fire for `LSUIElement` apps on macOS 14+ unless the
+        // user has granted accessibility permission — which isn't a
+        // reasonable ask for an app launcher.
+        //
+        // `windowDidResignKey` is the dependable signal: any click that
+        // hands focus to another window (ours or someone else's) takes
+        // key status away from the picker, and that's exactly the
+        // "dismiss me" moment. Activating the app + ordering the window
+        // front first ensures the window IS key before we start
+        // observing — otherwise we'd see a spurious resign on activation.
         centerOnActiveDisplay(window: window)
-
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+        resignKeyObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification,
+            object: window,
+            queue: .main
+        ) { _ in
+            resolveOnce(.cancelled)
+        }
     }
 
     private func dismiss() {
-        if let monitor = dismissMonitor {
-            NSEvent.removeMonitor(monitor)
-            dismissMonitor = nil
+        if let observer = resignKeyObserver {
+            NotificationCenter.default.removeObserver(observer)
+            resignKeyObserver = nil
         }
         window?.orderOut(nil)
         window = nil
