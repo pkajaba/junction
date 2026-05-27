@@ -63,6 +63,22 @@ enum AppHandoff: String, CaseIterable, Codable, Identifiable {
         }
     }
 
+    /// Vendor download URL — opened in the system default browser when
+    /// the user clicks "Not installed ↗" on a handoff row. Hand-picked
+    /// per app; we don't try to keep these auto-updated, but the seven
+    /// targets here have had stable download pages for years.
+    var downloadURL: URL {
+        switch self {
+        case .zoom:    return URL(string: "https://zoom.us/download")!
+        case .teams:   return URL(string: "https://www.microsoft.com/microsoft-teams/download-app")!
+        case .slack:   return URL(string: "https://slack.com/downloads/mac")!
+        case .notion:  return URL(string: "https://www.notion.so/desktop")!
+        case .linear:  return URL(string: "https://linear.app/download")!
+        case .spotify: return URL(string: "https://www.spotify.com/download")!
+        case .discord: return URL(string: "https://discord.com/download")!
+        }
+    }
+
     // MARK: - Transform
 
     /// Returns the native-scheme URL if `url` matches this handoff's
