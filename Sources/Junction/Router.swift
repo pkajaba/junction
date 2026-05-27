@@ -28,11 +28,15 @@ final class Router {
         }
 
         // Rewrite (currently: strip tracking params) before matching/opening.
-        let cleaned = URLRewriter.rewrite(url, settings: RewriterSettings.shared)
-        if cleaned != url {
-            URLLog.shared.updateRewritten(for: entryID, to: cleaned)
+        let rewriteResult = URLRewriter.rewrite(url, settings: RewriterSettings.shared)
+        let cleanedURL = rewriteResult.url
+        if rewriteResult.changed {
+            URLLog.shared.updateRewritten(
+                for: entryID,
+                to: cleanedURL,
+                strippedParams: rewriteResult.stripped
+            )
         }
-        let cleanedURL = cleaned
 
         // 0. Native-app handoff wins over rules. Rationale: if the user
         // has Zoom installed AND enabled the Zoom handoff, they almost
@@ -136,7 +140,8 @@ final class Router {
                         .replacingOccurrences(of: ".app", with: "")
                     URLLog.shared.updateRouting(
                         for: entryID,
-                        to: .routed(to: name, via: reason)
+                        to: .routed(to: name, via: reason),
+                        profile: target.profile
                     )
                 }
             }

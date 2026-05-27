@@ -43,7 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let sourceApp = Self.openerBundleID()
         for url in urls {
             Task { @MainActor in
-                let id = URLLog.shared.append(url, source: .openURLs)
+                let id = URLLog.shared.append(url, source: .openURLs, sourceApp: sourceApp)
                 Router.shared.route(url, sourceApp: sourceApp, entryID: id)
             }
         }
@@ -64,7 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let sourceApp = Self.openerBundleID()
         Task { @MainActor in
-            let id = URLLog.shared.append(url, source: .appleEvent)
+            let id = URLLog.shared.append(url, source: .appleEvent, sourceApp: sourceApp)
             Router.shared.route(url, sourceApp: sourceApp, entryID: id)
         }
     }
