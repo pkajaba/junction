@@ -28,6 +28,12 @@ enum HostChipMatcher {
             return Chips(hosts: [host], includeSubdomains: true)
         case .hostRegex(let regex):
             return parseHostListRegex(regex)
+        case .urlPrefix(let prefix):
+            // Strip the scheme so the chip reads `github.com/NBTSolutions`,
+            // not `https://github.com/NBTSolutions`. Subdomains don't
+            // expand for path-prefix chips — the prefix is literal.
+            let stripped = stripScheme(prefix)
+            return Chips(hosts: [stripped], includeSubdomains: false)
         case .urlContains:
             return nil
         case .any:
@@ -38,15 +44,35 @@ enum HostChipMatcher {
     }
 
     /// Build a matcher from a chip list. Picks the most efficient
-    /// representation: a single host with subdomains becomes `.host`,
-    /// everything else becomes a `.hostRegex`.
+    /// representation:
+    /// - empty → `.any`
+    /// - single chip with a path (`github.com/NBT/`) → `.urlPrefix` so the
+    ///   route only fires for URLs starting with that prefix
+    /// - single host chip with subdomains → `.host`
+    /// - multiple host chips → `.hostRegex` alternation
+    ///
+    /// Mixing path chips with host chips collapses to "use the first path
+    /// chip's prefix" — combining a path-prefix with N more hosts in a
+    /// single matcher isn't expressible cleanly; we treat that as a
+    /// user-error pattern and the editor steers them toward one path
+    /// chip per rule (split the rule if they need both).
     static func matcher(from chips: Chips) -> Matcher {
         let hosts = chips.hosts.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         guard !hosts.isEmpty else {
             // Empty chip list — no URL constraint. Becomes `.any`, which
-            // is only meaningful when paired with a `sourceApp` condition;
+            // is only meaningful when paired with a `sourceApps` condition;
             // the editor's validation rejects a rule with neither.
             return .any
+        }
+
+        if let pathChip = hosts.first(where: { hasPath($0) }) {
+            // Path-prefix mode. We default to `https://` because every
+            // routable URL Junction sees is http(s) and the prefix is
+            // matched case-insensitively; an http link to the same path
+            // will still match via `.urlPrefix` because the path tail is
+            // identical (the scheme is fixed but the user can edit
+            // rules.json to swap if they really want http only).
+            return .urlPrefix("https://" + pathChip)
         }
 
         if hosts.count == 1, chips.includeSubdomains {
@@ -63,6 +89,19 @@ enum HostChipMatcher {
         }
     }
 
+    /// True for chips that carry a path component (`github.com/NBT`).
+    /// A chip is "host-only" if it has no slash; the chip add UI uses
+    /// this to decide whether to disable "Include subdomains" and to
+    /// warn that more chips aren't supported in path-prefix mode.
+    static func hasPath(_ chip: String) -> Bool {
+        chip.contains("/")
+    }
+
+    private static func stripScheme(_ s: String) -> String {
+        guard let range = s.range(of: "://") else { return s }
+        return String(s[range.upperBound...])
+    }
+
     /// Caption text for the "Include subdomains" toggle, grounded in the
     /// user's actual hosts so it doesn't read like a copy-paste leftover.
     /// If the chip list has at least one host, the example uses *that*
@@ -74,29 +113,37 @@ enum HostChipMatcher {
             ?? "— so app.example.com matches example.com too"
     }
 
-    /// Best-effort coercion from "whatever the user typed" to a bare
-    /// hostname. The chip field accepts both plain hosts (`github.com`)
-    /// and full URLs pasted from the address bar
-    /// (`https://github.com/foo/bar?x=1`); the latter used to fail
-    /// silently because `isValidHost` rejected the `:` and `/`.
+    /// Best-effort coercion from "whatever the user typed" to a chip
+    /// value. The chip field accepts:
+    /// - bare hosts (`github.com`)
+    /// - full URLs with a non-trivial path
+    ///   (`https://github.com/NBTSolutions/foo`) — in this case the chip
+    ///   carries `host/path`, the matcher becomes `.urlPrefix`, and the
+    ///   rule only fires for URLs starting with that prefix
+    /// - full URLs whose path is just `/` or empty — equivalent to a
+    ///   bare host, the path is dropped
     ///
-    /// Strategy:
-    /// 1. If the input has a scheme or a slash, parse it as a URL and
-    ///    return its host. Prepends `https://` so bare `example.com/path`
-    ///    works too.
-    /// 2. Otherwise validate the trimmed input as a literal host.
-    ///
-    /// Returns nil for anything we can't extract a sensible host from.
-    static func normalizedHost(from input: String) -> String? {
+    /// Returns nil for anything we can't extract a sensible chip from.
+    static func normalizeChip(from input: String) -> String? {
         let trimmed = input.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
 
+        // URL-shaped input — extract host and (optionally) path.
         if trimmed.contains("://") || trimmed.contains("/") {
             let candidate = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
-            if let host = URLComponents(string: candidate)?.host, isValidHost(host) {
-                return host
+            guard let components = URLComponents(string: candidate),
+                  let host = components.host,
+                  isValidHost(host)
+            else { return nil }
+
+            let path = components.path
+            if !path.isEmpty && path != "/" {
+                // Keep the query string off — query params usually carry
+                // session info that shouldn't gate routing. Path is the
+                // intent-bearing part.
+                return host + path
             }
-            return nil
+            return host
         }
         return isValidHost(trimmed) ? trimmed : nil
     }

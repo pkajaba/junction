@@ -273,6 +273,7 @@ struct RulesSettingsView: View {
         case .host(let v):        return v
         case .hostRegex(let v):   return v
         case .urlContains(let v): return v
+        case .urlPrefix(let v):   return v
         case .any:                return "any URL"
         }
     }
@@ -284,8 +285,12 @@ struct RulesSettingsView: View {
         // existing target so a new rule plays nicely with the user's
         // setup. Falls back to Safari.
         let defaultBundle = mostUsedTargetBundleID() ?? "com.apple.Safari"
+        // Start with a target-aware placeholder ("Untitled → Safari") so
+        // the rule reads as something instead of "New rule" in the
+        // sidebar. The editor will keep refining the name as the user
+        // adds host chips — see RuleEditorView's auto-name behavior.
         let new = Rule(
-            name: "New rule",
+            name: Rule.placeholderName(forTarget: defaultBundle),
             match: .host(""),
             target: Target(browserBundleID: defaultBundle)
         )
@@ -403,6 +408,7 @@ private struct RuleRow: View {
         case .host(let v):        urlPart = v.isEmpty ? "—" : v
         case .hostRegex(let v):   urlPart = v
         case .urlContains(let v): urlPart = "contains: \(v)"
+        case .urlPrefix(let v):   urlPart = HostChipMatcher.chips(from: .urlPrefix(v))?.hosts.first ?? v
         case .any:                urlPart = "any URL"
         }
         if !rule.sourceApps.isEmpty {
