@@ -186,11 +186,14 @@ struct RuleEditorView: View {
             AddChipField(
                 text: $newChipText,
                 onCommit: { committed in
-                    let trimmed = committed.trimmingCharacters(in: .whitespaces)
-                    guard HostChipMatcher.isValidHost(trimmed) else { return }
+                    // Accept full URLs (https://github.com/foo) the same
+                    // as bare hosts (github.com) — extract the hostname
+                    // either way. Silent rejection of pasted URLs was
+                    // the v1 bug here.
+                    guard let host = HostChipMatcher.normalizedHost(from: committed) else { return }
                     var newHosts = chips.hosts
-                    if !newHosts.contains(trimmed) {
-                        newHosts.append(trimmed)
+                    if !newHosts.contains(host) {
+                        newHosts.append(host)
                     }
                     let updated = HostChipMatcher.Chips(
                         hosts: newHosts,

@@ -42,4 +42,39 @@ final class HostChipMatcherTests: XCTestCase {
         let matcher = HostChipMatcher.matcher(from: chips)
         XCTAssertEqual(HostChipMatcher.chips(from: matcher), chips)
     }
+
+    // MARK: - normalizedHost
+
+    func test_normalizedHost_bareHost_returnsItself() {
+        XCTAssertEqual(HostChipMatcher.normalizedHost(from: "github.com"), "github.com")
+        XCTAssertEqual(HostChipMatcher.normalizedHost(from: "  github.com  "), "github.com")
+    }
+
+    func test_normalizedHost_fullURL_extractsHost() {
+        XCTAssertEqual(
+            HostChipMatcher.normalizedHost(from: "https://github.com/NBTSolutions/foo?x=1"),
+            "github.com"
+        )
+        XCTAssertEqual(
+            HostChipMatcher.normalizedHost(from: "http://api.github.com/v3/repos"),
+            "api.github.com"
+        )
+    }
+
+    /// `example.com/path` (no scheme) is a common-enough mistype that
+    /// we still want to recover a host from it.
+    func test_normalizedHost_hostWithPathNoScheme_extractsHost() {
+        XCTAssertEqual(
+            HostChipMatcher.normalizedHost(from: "github.com/foo/bar"),
+            "github.com"
+        )
+    }
+
+    func test_normalizedHost_invalidInputs_returnNil() {
+        XCTAssertNil(HostChipMatcher.normalizedHost(from: ""))
+        XCTAssertNil(HostChipMatcher.normalizedHost(from: "   "))
+        XCTAssertNil(HostChipMatcher.normalizedHost(from: "not a host"))   // space → invalid
+        XCTAssertNil(HostChipMatcher.normalizedHost(from: "no-tld"))       // no dot
+        XCTAssertNil(HostChipMatcher.normalizedHost(from: "https://"))     // no host part
+    }
 }

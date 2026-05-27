@@ -74,6 +74,33 @@ enum HostChipMatcher {
             ?? "— so app.example.com matches example.com too"
     }
 
+    /// Best-effort coercion from "whatever the user typed" to a bare
+    /// hostname. The chip field accepts both plain hosts (`github.com`)
+    /// and full URLs pasted from the address bar
+    /// (`https://github.com/foo/bar?x=1`); the latter used to fail
+    /// silently because `isValidHost` rejected the `:` and `/`.
+    ///
+    /// Strategy:
+    /// 1. If the input has a scheme or a slash, parse it as a URL and
+    ///    return its host. Prepends `https://` so bare `example.com/path`
+    ///    works too.
+    /// 2. Otherwise validate the trimmed input as a literal host.
+    ///
+    /// Returns nil for anything we can't extract a sensible host from.
+    static func normalizedHost(from input: String) -> String? {
+        let trimmed = input.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+
+        if trimmed.contains("://") || trimmed.contains("/") {
+            let candidate = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
+            if let host = URLComponents(string: candidate)?.host, isValidHost(host) {
+                return host
+            }
+            return nil
+        }
+        return isValidHost(trimmed) ? trimmed : nil
+    }
+
     /// Returns true if the given host string looks like a valid hostname.
     /// Conservative — letters, digits, dots, hyphens, must contain at
     /// least one dot.
