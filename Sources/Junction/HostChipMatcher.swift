@@ -63,6 +63,17 @@ enum HostChipMatcher {
         }
     }
 
+    /// Caption text for the "Include subdomains" toggle, grounded in the
+    /// user's actual hosts so it doesn't read like a copy-paste leftover.
+    /// If the chip list has at least one host, the example uses *that*
+    /// host (`— so app.vetro.io matches too`); empty list falls back to a
+    /// generic illustration so the message still makes sense.
+    static func subdomainHint(_ chips: Chips) -> String {
+        let host = chips.hosts.first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
+        return host.map { "— so app.\($0) matches too" }
+            ?? "— so app.example.com matches example.com too"
+    }
+
     /// Returns true if the given host string looks like a valid hostname.
     /// Conservative — letters, digits, dots, hyphens, must contain at
     /// least one dot.

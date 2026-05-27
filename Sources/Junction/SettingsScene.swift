@@ -8,6 +8,7 @@ struct SettingsScene: View {
     enum Tab: Hashable {
         case rules
         case browsers
+        case handoff
         case advanced
         case activity
     }
@@ -23,6 +24,10 @@ struct SettingsScene: View {
             BrowsersSettingsView()
                 .tabItem { Label("Browsers", systemImage: "app.badge") }
                 .tag(Tab.browsers)
+
+            HandoffSettingsView()
+                .tabItem { Label("Handoff", systemImage: "arrow.up.right.square") }
+                .tag(Tab.handoff)
 
             AdvancedSettingsView()
                 .tabItem { Label("Advanced", systemImage: "slider.horizontal.3") }
