@@ -41,10 +41,23 @@ The browser-router niche exists, but every option has a catch in 2026:
 | [Velja](https://sindresorhus.com/velja) | Closed-source, paid. |
 | [Finicky](https://github.com/johnste/finicky) | Open-source, but JS-config only — no GUI, no picker. |
 | [Choosy](https://www.choosyosx.com/) | Closed-source, paid. |
+| [Browserino](https://github.com/AlexStrNik/Browserino) | Open-source and native — closest sibling. No URL rewriting, no app-origin rules, no native-app handoff yet (see issues [#13](https://github.com/AlexStrNik/Browserino/issues/13), [#42](https://github.com/AlexStrNik/Browserino/issues/42), [#49](https://github.com/AlexStrNik/Browserino/issues/49)). |
 
 **Junction** is the combination that didn't exist: open source (MIT),
 native (Swift/SwiftUI — no Electron, ~10 MB), with **both** a rules engine
 *and* a picker, plus a real settings UI.
+
+A handful of recurring Browserino feature requests are first-class in
+Junction by design — app-origin rules
+([#13](https://github.com/AlexStrNik/Browserino/issues/13)), native-app
+handoff for Zoom/Slack/etc.
+([#42](https://github.com/AlexStrNik/Browserino/issues/42)), URL
+rewriting ([#49](https://github.com/AlexStrNik/Browserino/issues/49)),
+hiding non-browser apps that register as `http` handlers
+([#36](https://github.com/AlexStrNik/Browserino/issues/36)), and promoting
+unrecognized browsers the allowlist missed
+([#24](https://github.com/AlexStrNik/Browserino/issues/24)). If you found
+your way here from one of those threads, that's why.
 
 ## Features
 
@@ -209,7 +222,10 @@ every PR via GitHub Actions; `swiftlint` runs on every build.
 ## Acknowledgements
 
 Junction stands on the shoulders of
-[Browserosaurus](https://github.com/will-stone/browserosaurus) (Will Stone)
-and [Finicky](https://github.com/johnste/finicky) (Johannes Stenmark) —
-both proved this kind of tool can be loved. Junction's goal is to keep that
-experience alive, natively and openly.
+[Browserosaurus](https://github.com/will-stone/browserosaurus) (Will
+Stone) and [Finicky](https://github.com/johnste/finicky) (Johannes
+Stenmark) — both proved this kind of tool can be loved.
+[Browserino](https://github.com/AlexStrNik/Browserino) (Alex Strnik) is
+the nearest contemporary MIT-licensed native option; reading through its
+issue tracker shaped several of Junction's defaults. Junction's goal is
+to keep that experience alive, natively and openly.
