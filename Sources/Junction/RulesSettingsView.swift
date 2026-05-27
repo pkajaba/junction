@@ -15,6 +15,14 @@ struct RulesSettingsView: View {
     /// User-typed search filter. Empty = show all rules.
     @State private var search: String = ""
 
+    /// Persists across Settings re-opens, per the Round 2 ② handoff spec.
+    /// Defaults to `.destination` for new installs (matches old behavior).
+    @AppStorage("JunctionRulesGrouping") private var groupingRaw: String = RulesGrouping.destination.rawValue
+
+    private var grouping: RulesGrouping {
+        RulesGrouping(rawValue: groupingRaw) ?? .destination
+    }
+
     /// Lock the sidebar visible. Without this, NavigationSplitView shows a
     /// sidebar-toggle button in the top-left toolbar — and inside the
     /// macOS Settings scene's TabView, clicking that button bubbles up
@@ -83,15 +91,35 @@ struct RulesSettingsView: View {
     }
 
     private var sidebarHeader: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
+        VStack(alignment: .leading, spacing: 8) {
+            // Title row: "Rules" on the left, +/− cluster on the right.
+            // Moving the add button into the header makes it a primary
+            // action — discoverable at first glance — instead of buried
+            // in a bottom toolbar.
+            HStack(alignment: .center, spacing: 6) {
                 Text("Rules")
                     .font(.system(size: 22, weight: .semibold))
                 Spacer()
+                SidebarMinusButton(
+                    isEnabled: selection != nil,
+                    action: deleteSelected
+                )
+                SidebarPlusButton(action: addRule)
             }
-            Text(subtitleText)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+            // Meta row: count + grouping pill. The pill opens a menu of
+            // grouping options (Destination / Source app / Match type /
+            // Nothing). Search active → text changes to "Showing N of M".
+            HStack(spacing: 4) {
+                Text(metaCountText)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                if search.isEmpty {
+                    Text(" · grouped by")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                    groupingPill
+                }
+            }
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 11, weight: .medium))
@@ -112,11 +140,52 @@ struct RulesSettingsView: View {
         .padding(.bottom, 8)
     }
 
-    private var subtitleText: String {
+    /// The "[destination ▾]" pill. Tapping opens a menu of the four
+    /// grouping options; the current selection has a leading checkmark.
+    private var groupingPill: some View {
+        Menu {
+            ForEach(RulesGrouping.allCases, id: \.self) { option in
+                Button {
+                    groupingRaw = option.rawValue
+                } label: {
+                    if option == grouping {
+                        Label(option.menuTitle, systemImage: "checkmark")
+                    } else {
+                        Text(option.menuTitle)
+                    }
+                    Text(option.menuSubtitle)
+                }
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Text(grouping.pillLabel)
+                    .font(.system(size: 11, weight: .medium))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 7, weight: .bold))
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1)
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Color.primary.opacity(0.07))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
+            )
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    private var metaCountText: String {
         let total = store.rules.count
         let unit = total == 1 ? "rule" : "rules"
         if search.isEmpty {
-            return "\(total) \(unit) · grouped by destination"
+            return "\(total) \(unit)"
         }
         let shown = groups.reduce(0) { $0 + $1.rules.count }
         return "Showing \(shown) of \(total) \(unit)"
@@ -144,27 +213,10 @@ struct RulesSettingsView: View {
 
     private var sidebarToolbar: some View {
         HStack(spacing: 4) {
-            Button {
-                addRule()
-            } label: {
-                Image(systemName: "plus")
-                    .frame(width: 22, height: 22)
-            }
-            .buttonStyle(.borderless)
-            .help("Add rule")
-
-            Button {
-                if let id = selection { store.delete(id: id); selection = nil }
-            } label: {
-                Image(systemName: "minus")
-                    .frame(width: 22, height: 22)
-            }
-            .buttonStyle(.borderless)
-            .disabled(selection == nil)
-            .help("Delete selected rule")
-
             Spacer()
-
+            // The +/− cluster moved to the header in the Round 2 ②
+            // redesign, so this bottom strip is just a deep-link to
+            // rules.json for power users.
             Button {
                 NSWorkspace.shared.activateFileViewerSelecting([RuleStore.storeURL])
             } label: {
@@ -174,6 +226,12 @@ struct RulesSettingsView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
+    }
+
+    private func deleteSelected() {
+        guard let id = selection else { return }
+        store.delete(id: id)
+        selection = nil
     }
 
     // MARK: - Detail pane
@@ -217,22 +275,11 @@ struct RulesSettingsView: View {
 
     // MARK: - Grouping logic
 
-    /// Rules grouped by target browser, filtered by search.
+    /// Rules bucketed according to the user's chosen grouping, filtered
+    /// by the search field. Bucketing lives on `RulesGrouping` so this
+    /// view stays focused on rendering.
     private var groups: [RuleGroup] {
-        let filtered = filteredRules
-        let buckets = Dictionary(grouping: filtered, by: \.target.browserBundleID)
-
-        return buckets
-            .map { bundleID, rules in
-                RuleGroup(
-                    bundleID: bundleID,
-                    displayName: browserDisplayName(bundleID),
-                    rules: rules
-                )
-            }
-            .sorted { a, b in
-                a.displayName.localizedCaseInsensitiveCompare(b.displayName) == .orderedAscending
-            }
+        grouping.buckets(of: filteredRules)
     }
 
     private var filteredRules: [Rule] {
@@ -304,16 +351,12 @@ struct RulesSettingsView: View {
     }
 }
 
-// MARK: - Group model
-
-struct RuleGroup: Identifiable, Equatable {
-    let bundleID: String
-    let displayName: String
-    let rules: [Rule]
-    var id: String { bundleID }
-}
-
 // MARK: - Group section view
+//
+// `RuleGroup` itself lives in RulesGrouping.swift; the section view
+// renders one of them, choosing the leading icon based on the group's
+// `Icon` case (real browser/app icon, SF Symbol, or nothing for the
+// flat "no grouping" case).
 
 private struct RuleGroupSection: View {
     let group: RuleGroup
@@ -323,30 +366,12 @@ private struct RuleGroupSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Button {
-                expanded.toggle()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .semibold))
-                        .rotationEffect(.degrees(expanded ? 0 : -90))
-                        .foregroundStyle(.secondary)
-                    BrowserIcon(bundleID: group.bundleID, size: 14)
-                    Text(group.displayName)
-                        .font(.system(size: 12.5, weight: .semibold))
-                    Spacer()
-                    Text("\(group.rules.count)")
-                        .font(.system(size: 10.5, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .contentShape(Rectangle())
+            if group.hasHeader {
+                header
             }
-            .buttonStyle(.plain)
-
-            if expanded {
+            // Flat groups have no header, so the disclosure state is
+            // ignored and rows render unconditionally.
+            if expanded || !group.hasHeader {
                 ForEach(group.rules) { rule in
                     RuleRow(rule: rule, isSelected: rule.id == selection) {
                         selection = rule.id
@@ -354,6 +379,116 @@ private struct RuleGroupSection: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var header: some View {
+        Button {
+            expanded.toggle()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .rotationEffect(.degrees(expanded ? 0 : -90))
+                    .foregroundStyle(.secondary)
+                groupIcon
+                Text(group.displayName)
+                    .font(.system(size: 12.5, weight: .semibold))
+                Spacer()
+                Text("\(group.rules.count)")
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var groupIcon: some View {
+        switch group.icon {
+        case .browser(let bundleID):
+            BrowserIcon(bundleID: bundleID, size: 14)
+        case .app(let bundleID):
+            if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+                Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 14, height: 14)
+            } else {
+                Image(systemName: "app.dashed")
+                    .font(.system(size: 11))
+                    .frame(width: 14, height: 14)
+                    .foregroundStyle(.tertiary)
+            }
+        case .symbol(let name):
+            Image(systemName: name)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 14, height: 14)
+        case .none:
+            EmptyView()
+        }
+    }
+}
+
+// MARK: - Header buttons (Round 2 ②)
+//
+// Two small circular buttons that live to the right of the "Rules"
+// title. `+` is the primary action, hence the saturated fill. `−` is
+// the secondary action — visible but understated, and disabled to 40%
+// opacity when nothing is selected.
+
+private struct SidebarPlusButton: View {
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "plus")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 22, height: 22)
+                .background(
+                    Circle().fill(hovering ? Color.accentColor.opacity(0.85) : Color.accentColor)
+                )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Add rule")
+        .accessibilityLabel("Add rule")
+    }
+}
+
+private struct SidebarMinusButton: View {
+    let isEnabled: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "minus")
+                .font(.system(size: 11, weight: .regular))
+                .foregroundStyle(.secondary)
+                .frame(width: 22, height: 22)
+                .background(
+                    Circle().fill(hovering && isEnabled
+                                  ? Color.primary.opacity(0.06)
+                                  : Color(nsColor: .controlBackgroundColor))
+                )
+                .overlay(
+                    Circle().strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
+                )
+        }
+        .buttonStyle(.plain)
+        .opacity(isEnabled ? 1 : 0.4)
+        .onHover { hovering = $0 }
+        .disabled(!isEnabled)
+        .help("Delete selected rule")
+        .accessibilityLabel("Delete selected rule")
     }
 }
 
