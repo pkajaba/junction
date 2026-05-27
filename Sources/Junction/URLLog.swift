@@ -44,9 +44,23 @@ final class URLLog: ObservableObject {
         /// URL after `URLRewriter` ran, if it changed anything. The rule
         /// engine and the open call both use this when present.
         var rewritten: URL?
+        /// Query-parameter names the rewriter removed, in original order.
+        /// Powers the Activity tab's `· cleaned (utm_source stripped)`
+        /// callout — surfaces what Junction did to the URL.
+        var strippedParams: [String] = []
         let source: Source
+        /// Bundle ID of the app the link was opened from, when known
+        /// (`NSWorkspace.shared.frontmostApplication` at receive time).
+        /// Empty for legacy entries and for openers Junction couldn't
+        /// identify. Drives `from <App>` in the Activity row subline.
+        let sourceApp: String?
         let receivedAt: Date
         var routing: Routing = .pending
+        /// Profile of the target browser at the moment of routing, if
+        /// any. Stored separately from `Routing` so we can show
+        /// `Chrome · Work` in the outcome block without bloating the
+        /// `Routing` enum's associated values.
+        var routedProfile: String?
     }
 
     static let shared = URLLog()
@@ -57,25 +71,33 @@ final class URLLog: ObservableObject {
 
     /// Append a freshly received URL. Returns the entry's id so the caller
     /// (typically the `Router`) can update its routing status later.
+    ///
+    /// `sourceApp` is the opener's bundle ID, recorded eagerly at append
+    /// time because `NSWorkspace.frontmostApplication` is only reliable
+    /// the instant the URL arrives — by the time the router decides
+    /// where to send it, focus may have shifted.
     @discardableResult
-    func append(_ url: URL, source: Source) -> UUID {
-        let entry = Entry(url: url, source: source, receivedAt: Date())
+    func append(_ url: URL, source: Source, sourceApp: String? = nil) -> UUID {
+        let entry = Entry(url: url, source: source, sourceApp: sourceApp, receivedAt: Date())
         entries.append(entry)
         return entry.id
     }
 
-    /// Mutate the routing field of an existing entry. No-op if the id is
+    /// Mutate the routing field of an existing entry, optionally also
+    /// recording the target browser's profile. No-op if the id is
     /// unknown (e.g., the entry was cleared between receipt and routing).
-    func updateRouting(for id: UUID, to routing: Routing) {
+    func updateRouting(for id: UUID, to routing: Routing, profile: String? = nil) {
         guard let idx = entries.firstIndex(where: { $0.id == id }) else { return }
         entries[idx].routing = routing
+        entries[idx].routedProfile = profile
     }
 
-    /// Record the post-rewrite URL on an entry. Called only when the
-    /// rewriter actually changed the URL.
-    func updateRewritten(for id: UUID, to rewritten: URL) {
+    /// Record the post-rewrite URL and the list of params we removed.
+    /// Called only when the rewriter actually changed the URL.
+    func updateRewritten(for id: UUID, to rewritten: URL, strippedParams: [String] = []) {
         guard let idx = entries.firstIndex(where: { $0.id == id }) else { return }
         entries[idx].rewritten = rewritten
+        entries[idx].strippedParams = strippedParams
     }
 
     func clear() {
