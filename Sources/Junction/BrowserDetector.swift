@@ -66,14 +66,21 @@ final class BrowserDetector {
         detectAll().filter { !BrowserHideList.shared.isHidden($0.bundleID) }
     }
 
-    /// All recognized browsers (allowlist ∪ user-promoted), ignoring the
-    /// hide list. Used by the Browsers settings tab and the rule editor's
-    /// browser picker.
+    /// All recognized browsers (allowlist ∪ user-promoted ∪ manually-added),
+    /// ignoring the hide list. Used by the Browsers settings tab and the
+    /// rule editor's browser picker.
     func detectAll() -> [DetectedBrowser] {
         let recognized = recognizedBundleIDs()
-        return rawHTTPHandlers()
-            .filter { recognized.contains($0.bundleID) }
-            .sorted(by: Self.browserSort)
+        var found = rawHTTPHandlers().filter { recognized.contains($0.bundleID) }
+        // Union with manually-added browsers, but only the ones that
+        // actually resolve on disk — there's nothing to route to
+        // otherwise. Dedupe by bundle ID so a manual entry doesn't
+        // double up with an http-handler scan hit.
+        let seen = Set(found.map(\.bundleID))
+        for manual in ManualBrowserList.shared.resolvedBrowsers() where !seen.contains(manual.bundleID) {
+            found.append(manual)
+        }
+        return found.sorted(by: Self.browserSort)
     }
 
     /// `http`-handler apps that are **not** recognized as browsers —
