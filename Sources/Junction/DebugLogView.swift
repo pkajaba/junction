@@ -45,12 +45,27 @@ struct DebugLogView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
+            Button("Export…", action: exportLog)
+                .disabled(log.entries.isEmpty)
+                .controlSize(.small)
             Button("Clear", action: log.clear)
                 .disabled(log.entries.isEmpty)
                 .controlSize(.small)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
+    }
+
+    /// Write the activity log to a user-chosen `.jsonl` file. Same format
+    /// Junction persists internally — one JSON object per line — so it's
+    /// easy to grep or pipe into jq.
+    private func exportLog() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "junction-activity.jsonl"
+        panel.canCreateDirectories = true
+        panel.title = "Export Activity Log"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try? log.exportJSONL().write(to: url, atomically: true, encoding: .utf8)
     }
 
     private func errorBanner(_ message: String) -> some View {
