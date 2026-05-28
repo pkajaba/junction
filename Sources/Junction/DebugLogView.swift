@@ -18,6 +18,7 @@ struct DebugLogView: View {
     // directly so the tab works standalone inside the Settings TabView.
     @ObservedObject private var log = URLLog.shared
     @ObservedObject private var ruleStore = RuleStore.shared
+    @ObservedObject private var dismissals = SuggestionDismissals.shared
     @State private var filter: ActivityFilter = .all
     /// Selected row, so ⌘R knows which entry to turn into a rule.
     @State private var selectedEntryID: UUID?
@@ -30,6 +31,10 @@ struct DebugLogView: View {
             }
             filterBar
             Divider()
+            if let suggestion = bannerSuggestion {
+                suggestionBanner(suggestion)
+                Divider()
+            }
             content
         }
     }
@@ -135,6 +140,9 @@ struct DebugLogView: View {
 
     private var list: some View {
         let entries = filtered
+        // Tally manual picks once for the whole list, then hand each row
+        // its own count — keeps the per-row pill lookup O(1).
+        let tally = ActivitySuggestions.tally(log.entries)
         return Group {
             if entries.isEmpty {
                 filteredEmpty
@@ -145,6 +153,7 @@ struct DebugLogView: View {
                             ActivityRowView(
                                 entry: entry,
                                 isSelected: entry.id == selectedEntryID,
+                                weeklyPickCount: weeklyPickCount(for: entry, in: tally),
                                 onSelect: { selectedEntryID = entry.id },
                                 onCreateRule: { createRule(from: entry) }
                             )
@@ -173,6 +182,75 @@ struct DebugLogView: View {
     private func createRuleFromSelected() {
         guard let id = selectedEntryID,
               let entry = log.entries.first(where: { $0.id == id })
+        else { return }
+        createRule(from: entry)
+    }
+
+    // MARK: - Suggestion pill + banner
+
+    /// Count for this row's "N× this week → Browser" pill, or `nil` to
+    /// hide it. Only picker-manual rows *inside the window* show it, so an
+    /// old row never claims a misleading "this week" tally.
+    private func weeklyPickCount(
+        for entry: URLLog.Entry,
+        in tally: [SuggestionKey: PickSuggestion]
+    ) -> Int? {
+        guard case let .routed(browser, .picker) = entry.routing,
+              entry.receivedAt >= Date().addingTimeInterval(-ActivitySuggestions.window),
+              let host = (entry.rewritten ?? entry.url).host, !host.isEmpty
+        else { return nil }
+        let count = tally[SuggestionKey(host: host, browser: browser)]?.count ?? 0
+        return count >= 2 ? count : nil
+    }
+
+    /// The one nudge worth a banner right now (count ≥ 3, host not
+    /// dismissed in the last 7 days), or `nil`.
+    private var bannerSuggestion: PickSuggestion? {
+        ActivitySuggestions.banner(
+            from: log.entries,
+            dismissedHosts: dismissals.activeHosts()
+        )
+    }
+
+    /// Gentle "you keep doing this by hand — codify it?" banner. Primary
+    /// button prefills a rule; the ✕ suppresses this host for 7 days.
+    private func suggestionBanner(_ suggestion: PickSuggestion) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "wand.and.stars")
+                .font(.system(size: 14))
+                .foregroundStyle(Color.accentColor)
+            (Text("You've picked ").foregroundStyle(.secondary)
+             + Text(suggestion.browser).fontWeight(.semibold)
+             + Text(" for ").foregroundStyle(.secondary)
+             + Text(suggestion.host).fontWeight(.semibold)
+             + Text(" \(suggestion.count) times this week.").foregroundStyle(.secondary))
+                .font(.system(size: 12))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Button("Make it a rule?") { createRuleFromSuggestion(suggestion) }
+                .controlSize(.small)
+                .buttonStyle(.borderedProminent)
+            Button {
+                dismissals.dismiss(host: suggestion.host)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Dismiss for 7 days")
+            .accessibilityLabel("Dismiss suggestion for \(suggestion.host)")
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .background(Color.accentColor.opacity(0.08))
+    }
+
+    private func createRuleFromSuggestion(_ suggestion: PickSuggestion) {
+        guard let entry = log.entries.first(where: { $0.id == suggestion.entryID })
         else { return }
         createRule(from: entry)
     }
@@ -330,6 +408,22 @@ extension URLLog.Entry {
     log.updateRouting(for: id3, to: .routed(to: "Safari", via: .picker))
     log.updateRouting(for: id4, to: .failed(reason: "Safari not installed"))
     log.updateRouting(for: id5, to: .unsupported)
+    return DebugLogView()
+        .frame(width: 760, height: 480)
+}
+
+#Preview("With suggestion") {
+    // Three manual picks of Chrome for figma.com → triggers both the
+    // amber "3× this week" pill on each row and the "Make it a rule?"
+    // banner above the list.
+    let log = URLLog.shared
+    log.clear()
+    for path in ["file/a", "file/b", "file/c"] {
+        let id = log.append(URL(string: "https://figma.com/\(path)")!,
+                            source: .openURLs, sourceApp: "com.tinyspeck.slackmacgap")
+        log.updateRouting(for: id, to: .routed(to: "Chrome", via: .picker),
+                          profile: "Work", bundleID: "com.google.Chrome")
+    }
     return DebugLogView()
         .frame(width: 760, height: 480)
 }

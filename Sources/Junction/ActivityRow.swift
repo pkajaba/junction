@@ -8,6 +8,11 @@ import AppKit
 struct ActivityRowView: View {
     let entry: URLLog.Entry
     let isSelected: Bool
+    /// Manual picks for this row's (host, browser) in the trailing 7
+    /// days, when ≥ 2 — drives the amber "N× this week → Browser" pill.
+    /// `nil` hides the pill. Computed once by `DebugLogView` and passed
+    /// in so the row stays O(1).
+    let weeklyPickCount: Int?
     let onSelect: () -> Void
     let onCreateRule: () -> Void
 
@@ -110,11 +115,38 @@ struct ActivityRowView: View {
                 Text("cleaned (\(formatStripped(entry.strippedParams)) stripped)")
                     .foregroundStyle(Color(red: 0.20, green: 0.66, blue: 0.33))
             }
+            if let count = weeklyPickCount, let browser = manualPickBrowser {
+                if entry.sourceApp != nil || !entry.strippedParams.isEmpty { dot }
+                weeklyPickPill(count: count, browser: browser)
+            }
         }
         .font(.system(size: 11))
         .foregroundStyle(.secondary)
         .lineLimit(1)
         .truncationMode(.tail)
+    }
+
+    /// Browser this row was manually routed to, if it was a picker pick.
+    /// Used as the pill's "→ <Browser>" target.
+    private var manualPickBrowser: String? {
+        guard case let .routed(browser, .picker) = entry.routing else { return nil }
+        return browser
+    }
+
+    /// Amber "N× this week → Browser" capsule — the gentle "you keep
+    /// doing this by hand" nudge that pairs with the banner above the list.
+    private func weeklyPickPill(count: Int, browser: String) -> some View {
+        Text("\(count)× this week → \(browser)")
+            .font(.system(size: 10.5, weight: .medium))
+            .monospacedDigit()
+            .foregroundStyle(Color(red: 0.72, green: 0.47, blue: 0.0))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1)
+            .background(
+                Capsule().fill(Color(red: 0.96, green: 0.65, blue: 0.14).opacity(0.16))
+            )
+            .lineLimit(1)
+            .fixedSize()
     }
 
     private var dot: some View {
