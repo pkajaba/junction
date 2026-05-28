@@ -1,76 +1,165 @@
 import AppKit
 import SwiftUI
+import Combine
 
-/// Owns the Settings window and presents it on demand.
+/// Owns the Settings window for Junction's menu-bar (`LSUIElement`) life.
 ///
-/// We *could* use SwiftUI's built-in `Settings { ... }` scene + AppKit's
-/// `showSettingsWindow:` responder action — that works for regular (Dock)
-/// apps. For `LSUIElement` menu-bar apps it's unreliable: the action
-/// gets dispatched into a responder chain that doesn't always include
-/// the Settings scene's hidden window, so the click silently does
-/// nothing. Presenting the window ourselves keeps the trigger path
-/// short and predictable.
+/// We don't use SwiftUI's `Settings { … }` scene: `showSettingsWindow:`
+/// silently no-ops for an accessory app even after promoting to
+/// `.regular` activation (a long-standing macOS limitation). Instead we
+/// build the window ourselves with a real `NSToolbar` carrying a
+/// centered segmented tab control — the same chrome the native Settings
+/// scene renders (tabs in the toolbar, panes filling edge-to-edge),
+/// just under our control so it opens reliably.
 @MainActor
-final class SettingsWindowController {
+final class SettingsWindowController: NSObject, NSToolbarDelegate {
 
     static let shared = SettingsWindowController()
 
+    /// The Settings tabs, in display order.
+    enum Tab: String, CaseIterable {
+        case rules = "Rules"
+        case browsers = "Browsers"
+        case handoff = "Handoff"
+        case advanced = "Advanced"
+        case activity = "Activity"
+
+        var title: String { rawValue }
+    }
+
+    private let selection = SettingsSelection()
     private var window: NSWindow?
+    private weak var segmented: NSSegmentedControl?
+    private var closeObserver: Any?
 
-    private init() {}
+    private static let toolbarID = NSToolbar.Identifier("JunctionSettingsToolbar")
+    private static let tabsItemID = NSToolbarItem.Identifier("JunctionTabs")
 
-    /// Show the Settings window, creating it on first use. Re-entrant —
-    /// if the window already exists, just bring it forward.
+    private override init() { super.init() }
+
+    // MARK: - Show
+
     func show() {
+        // Dock icon + activation while Settings is open; demote on close.
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+
         if window == nil {
             window = makeWindow()
         }
-        guard let window else { return }
-
-        // Promote to a regular Dock-icon app while Settings is open. The
-        // user is actively interacting with a window, so showing it in
-        // the Dock reduces confusion ("did Junction quit? where is it?").
-        // We demote back to `.accessory` on window close — see
-        // `windowWillClose` notification handler below.
-        NSApp.setActivationPolicy(.regular)
-
-        // LSUIElement apps stay backgrounded until explicitly activated.
-        // The deprecated `ignoringOtherApps: true` variant is still the
-        // only call that reliably steals focus from a frontmost app —
-        // macOS 14's cooperative `.activate()` declines in this scenario.
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
-        window.orderFrontRegardless()
+        window?.makeKeyAndOrderFront(nil)
+        window?.orderFrontRegardless()
     }
 
+    /// Open Settings already focused on a particular tab — used by
+    /// cross-tab actions (e.g. a future "create rule from Activity").
+    func show(tab: Tab) {
+        selection.tab = tab
+        syncSegmented()
+        show()
+    }
+
+    // MARK: - Window construction
+
     private func makeWindow() -> NSWindow {
-        let hosting = NSHostingController(rootView: SettingsScene())
+        let root = SettingsRootView(selection: selection)
+        let hosting = NSHostingController(rootView: root)
         let window = NSWindow(contentViewController: hosting)
         window.title = "Junction Settings"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-        window.setContentSize(NSSize(width: 760, height: 540))
+        window.setContentSize(NSSize(width: 820, height: 560))
         window.center()
-        // Keep the window around when closed — re-opening should keep the
-        // user's last tab + size, and skip re-construction.
         window.isReleasedWhenClosed = false
         window.setFrameAutosaveName("JunctionSettings")
-        // Show on every Space the user switches to, like other agent apps
-        // (Bartender, Magnet). Falls back to the active Space if pinned.
         window.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace]
 
-        // Drop the Dock icon when the user closes the window so Junction
-        // goes back to its quiet menu-bar-only shape. Observer is scoped
-        // to this specific window — won't fire for picker windows.
-        NotificationCenter.default.addObserver(
+        let toolbar = NSToolbar(identifier: Self.toolbarID)
+        toolbar.delegate = self
+        toolbar.displayMode = .iconOnly
+        toolbar.allowsUserCustomization = false
+        toolbar.centeredItemIdentifier = Self.tabsItemID
+        window.toolbar = toolbar
+        window.toolbarStyle = .unified
+
+        closeObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification,
             object: window,
             queue: .main
         ) { _ in
-            Task { @MainActor in
-                NSApp.setActivationPolicy(.accessory)
-            }
+            Task { @MainActor in NSApp.setActivationPolicy(.accessory) }
         }
 
         return window
+    }
+
+    // MARK: - Toolbar delegate
+
+    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        [Self.tabsItemID]
+    }
+
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        [Self.tabsItemID]
+    }
+
+    func toolbar(
+        _ toolbar: NSToolbar,
+        itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
+        willBeInsertedIntoToolbar flag: Bool
+    ) -> NSToolbarItem? {
+        guard itemIdentifier == Self.tabsItemID else { return nil }
+        let item = NSToolbarItem(itemIdentifier: Self.tabsItemID)
+        let control = NSSegmentedControl(
+            labels: Tab.allCases.map(\.title),
+            trackingMode: .selectOne,
+            target: self,
+            action: #selector(tabChanged(_:))
+        )
+        control.segmentStyle = .texturedRounded
+        control.selectedSegment = Tab.allCases.firstIndex(of: selection.tab) ?? 0
+        item.view = control
+        segmented = control
+        return item
+    }
+
+    @objc private func tabChanged(_ sender: NSSegmentedControl) {
+        let idx = sender.selectedSegment
+        guard Tab.allCases.indices.contains(idx) else { return }
+        selection.tab = Tab.allCases[idx]
+    }
+
+    private func syncSegmented() {
+        segmented?.selectedSegment = Tab.allCases.firstIndex(of: selection.tab) ?? 0
+    }
+}
+
+// MARK: - Selection bridge
+
+/// Bridges the AppKit toolbar's selection to the SwiftUI content. The
+/// segmented control writes `tab`; `SettingsRootView` observes it and
+/// swaps the visible pane.
+@MainActor
+final class SettingsSelection: ObservableObject {
+    @Published var tab: SettingsWindowController.Tab = .rules
+}
+
+// MARK: - Root content
+
+/// Hosts whichever tab is selected. No `TabView` — the toolbar provides
+/// the tab affordance, so this just switches on the shared selection.
+struct SettingsRootView: View {
+    @ObservedObject var selection: SettingsSelection
+
+    var body: some View {
+        Group {
+            switch selection.tab {
+            case .rules:    RulesSettingsView()
+            case .browsers: BrowsersSettingsView()
+            case .handoff:  HandoffSettingsView()
+            case .advanced: AdvancedSettingsView()
+            case .activity: DebugLogView()
+            }
+        }
+        .frame(minWidth: 720, idealWidth: 820, minHeight: 480, idealHeight: 560)
     }
 }

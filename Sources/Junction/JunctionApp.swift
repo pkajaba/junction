@@ -23,12 +23,11 @@ struct JunctionApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        // SwiftUI's `App.body` must return at least one Scene. The
-        // Settings window itself is presented imperatively by
-        // `SettingsWindowController` from the menu-bar item — see that
-        // file for why we don't use SwiftUI's `Settings { ... }` scene.
-        // `EmptyView` satisfies the requirement without adding any
-        // window of its own.
+        // `App.body` must return at least one Scene. The actual Settings
+        // window is built imperatively by `SettingsWindowController`
+        // (a manual `NSWindow` + `NSToolbar`) because SwiftUI's
+        // `Settings` scene won't open for an `LSUIElement` app — see that
+        // file. `EmptyView` here just satisfies the protocol.
         Settings {
             EmptyView()
         }

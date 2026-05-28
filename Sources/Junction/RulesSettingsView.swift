@@ -82,12 +82,6 @@ struct RulesSettingsView: View {
             sidebarToolbar
         }
         .background(Color(nsColor: .windowBackgroundColor))
-        // Settings' TabView toolbar floats above content by default, so
-        // without an explicit inset our "Rules" title renders behind the
-        // tab buttons. Match the inset Apple uses in its own panes.
-        .safeAreaInset(edge: .top, spacing: 0) {
-            Color.clear.frame(height: 44)
-        }
     }
 
     private var sidebarHeader: some View {
