@@ -141,7 +141,8 @@ final class Router {
                     URLLog.shared.updateRouting(
                         for: entryID,
                         to: .routed(to: name, via: reason),
-                        profile: target.profile
+                        profile: target.profile,
+                        bundleID: target.browserBundleID
                     )
                 }
             }

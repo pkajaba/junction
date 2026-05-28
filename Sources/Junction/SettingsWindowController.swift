@@ -2,6 +2,33 @@ import AppKit
 import SwiftUI
 import Combine
 
+/// Cross-tab coordinator for the Settings window. Shared singleton so any
+/// tab (and the AppKit toolbar) can read/write the current tab and hand
+/// off a "go here next" action — e.g. the Activity tab building a rule
+/// and revealing it in the Rules tab.
+@MainActor
+final class SettingsCoordinator: ObservableObject {
+    static let shared = SettingsCoordinator()
+
+    /// Which Settings pane is visible. Written by the toolbar's
+    /// segmented control and by cross-tab actions.
+    @Published var tab: SettingsWindowController.Tab = .rules
+
+    /// When set, the Rules tab selects this rule on next render and
+    /// clears the value. Used by "Create rule from Activity".
+    @Published var pendingRuleSelection: UUID?
+
+    private init() {}
+
+    /// Add a rule, switch to the Rules tab, and queue it for selection —
+    /// the one-click "turn this link into a rule" path from Activity.
+    func createRuleAndReveal(_ rule: Rule) {
+        RuleStore.shared.add(rule)
+        pendingRuleSelection = rule.id
+        tab = .rules
+    }
+}
+
 /// Owns the Settings window for Junction's menu-bar (`LSUIElement`) life.
 ///
 /// We don't use SwiftUI's `Settings { … }` scene: `showSettingsWindow:`
@@ -27,10 +54,11 @@ final class SettingsWindowController: NSObject, NSToolbarDelegate {
         var title: String { rawValue }
     }
 
-    private let selection = SettingsSelection()
+    private let coordinator = SettingsCoordinator.shared
     private var window: NSWindow?
     private weak var segmented: NSSegmentedControl?
     private var closeObserver: Any?
+    private var tabObserver: AnyCancellable?
 
     private static let toolbarID = NSToolbar.Identifier("JunctionSettingsToolbar")
     private static let tabsItemID = NSToolbarItem.Identifier("JunctionTabs")
@@ -52,17 +80,23 @@ final class SettingsWindowController: NSObject, NSToolbarDelegate {
     }
 
     /// Open Settings already focused on a particular tab — used by
-    /// cross-tab actions (e.g. a future "create rule from Activity").
+    /// cross-tab actions (e.g. "create rule from Activity").
     func show(tab: Tab) {
-        selection.tab = tab
-        syncSegmented()
+        coordinator.tab = tab
         show()
     }
 
     // MARK: - Window construction
 
     private func makeWindow() -> NSWindow {
-        let root = SettingsRootView(selection: selection)
+        // Keep the toolbar's segmented control in sync when the tab is
+        // changed programmatically (e.g. createRuleAndReveal switches to
+        // Rules). User-driven changes go the other way via tabChanged.
+        tabObserver = coordinator.$tab.sink { [weak self] tab in
+            self?.segmented?.selectedSegment = Tab.allCases.firstIndex(of: tab) ?? 0
+        }
+
+        let root = SettingsRootView(coordinator: coordinator)
         let hosting = NSHostingController(rootView: root)
         let window = NSWindow(contentViewController: hosting)
         window.title = "Junction Settings"
@@ -116,7 +150,7 @@ final class SettingsWindowController: NSObject, NSToolbarDelegate {
             action: #selector(tabChanged(_:))
         )
         control.segmentStyle = .texturedRounded
-        control.selectedSegment = Tab.allCases.firstIndex(of: selection.tab) ?? 0
+        control.selectedSegment = Tab.allCases.firstIndex(of: coordinator.tab) ?? 0
         item.view = control
         segmented = control
         return item
@@ -125,34 +159,20 @@ final class SettingsWindowController: NSObject, NSToolbarDelegate {
     @objc private func tabChanged(_ sender: NSSegmentedControl) {
         let idx = sender.selectedSegment
         guard Tab.allCases.indices.contains(idx) else { return }
-        selection.tab = Tab.allCases[idx]
+        coordinator.tab = Tab.allCases[idx]
     }
-
-    private func syncSegmented() {
-        segmented?.selectedSegment = Tab.allCases.firstIndex(of: selection.tab) ?? 0
-    }
-}
-
-// MARK: - Selection bridge
-
-/// Bridges the AppKit toolbar's selection to the SwiftUI content. The
-/// segmented control writes `tab`; `SettingsRootView` observes it and
-/// swaps the visible pane.
-@MainActor
-final class SettingsSelection: ObservableObject {
-    @Published var tab: SettingsWindowController.Tab = .rules
 }
 
 // MARK: - Root content
 
 /// Hosts whichever tab is selected. No `TabView` — the toolbar provides
-/// the tab affordance, so this just switches on the shared selection.
+/// the tab affordance, so this just switches on the shared coordinator.
 struct SettingsRootView: View {
-    @ObservedObject var selection: SettingsSelection
+    @ObservedObject var coordinator: SettingsCoordinator
 
     var body: some View {
         Group {
-            switch selection.tab {
+            switch coordinator.tab {
             case .rules:    RulesSettingsView()
             case .browsers: BrowsersSettingsView()
             case .handoff:  HandoffSettingsView()

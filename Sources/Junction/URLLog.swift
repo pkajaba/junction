@@ -68,6 +68,12 @@ final class URLLog: ObservableObject {
         /// `Chrome · Work` in the outcome block without bloating the
         /// `Routing` enum's associated values.
         var routedProfile: String?
+        /// Bundle ID of the browser this URL was routed to (the
+        /// `Routing` enum only carries the display name, which isn't
+        /// enough to build a rule from). Lets the Activity tab's
+        /// "Create rule" action prefill the target precisely. Optional
+        /// + decoded-if-present, so older `activity.jsonl` files load.
+        var routedBundleID: String?
     }
 
     static let shared = URLLog()
@@ -104,10 +110,16 @@ final class URLLog: ObservableObject {
     /// Mutate the routing field of an existing entry, optionally also
     /// recording the target browser's profile. No-op if the id is
     /// unknown (e.g., the entry was cleared between receipt and routing).
-    func updateRouting(for id: UUID, to routing: Routing, profile: String? = nil) {
+    func updateRouting(
+        for id: UUID,
+        to routing: Routing,
+        profile: String? = nil,
+        bundleID: String? = nil
+    ) {
         guard let idx = entries.firstIndex(where: { $0.id == id }) else { return }
         entries[idx].routing = routing
         entries[idx].routedProfile = profile
+        entries[idx].routedBundleID = bundleID
         persist()
     }
 
