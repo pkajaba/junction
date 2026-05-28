@@ -61,8 +61,10 @@ your way here from one of those threads, that's why.
 
 ## Features
 
-- **Rule engine** — match on host (+ subdomains), host regex, or URL
-  substring; route to any browser + profile + launch args.
+- **Rule engine** — match on host (+ subdomains), host regex, URL
+  substring, or URL prefix (path-aware) — and optionally narrow by the
+  **app the link came from** (e.g. links from Slack → work Chrome). Route
+  to any browser + profile + launch args.
 - **Keyboard-driven picker** — for unmatched URLs. Number keys, arrows,
   Return. Pin a row to turn the choice into a saved rule.
 - **Per-browser profiles** — Chrome/Brave/Edge/Vivaldi/Opera
@@ -77,7 +79,9 @@ your way here from one of those threads, that's why.
   inline editor with a host-chip matcher and a live "test this URL" field.
 - **Live config reload** — `rules.json` is plain text; edit it in any
   editor and Junction picks it up instantly (it watches the file).
-- **Liquid Glass picker** on macOS 26, graceful material fallback below.
+- **Native picker chrome** — a system blur material (`NSVisualEffectView`)
+  that the OS renders with Liquid Glass on macOS 26 and a standard vibrant
+  material below.
 
 ## Screenshots
 
@@ -155,7 +159,11 @@ tester.
 **Matchers:** `host` (exact or subdomain — `github.com` matches
 `api.github.com` but not `notgithub.com`), `hostRegex` (case-insensitive
 regex on the host), `urlContains` (case-insensitive substring on the whole
-URL). Rules evaluate top to bottom; first enabled match wins.
+URL), `urlPrefix` (anchored, case-insensitive prefix on the whole URL —
+e.g. `https://github.com/acme/` to route just one org's pages), and `any`
+(matches every URL, for rules that key off the source app alone). A rule
+can additionally require the link to come from specific apps (`sourceApps`,
+by bundle ID). Rules evaluate top to bottom; first enabled match wins.
 
 ### The picker
 

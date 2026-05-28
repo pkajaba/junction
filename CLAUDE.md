@@ -1,8 +1,9 @@
 # CLAUDE.md
 
 Junction is a native macOS browser router. URLs go through rules → a picker
-when no rule matches → the chosen browser. Pre-v0.1, single developer, no
-external runtime deps.
+when no rule matches → the chosen browser. Feature-complete and in
+dogfooding (pre-v0.1 — only signing/notarization + a Homebrew cask remain).
+Single developer, no external runtime deps.
 
 Read this whole file before doing anything substantive. It's short on
 purpose; everything below is something a fresh session would otherwise have
@@ -11,7 +12,14 @@ to discover the hard way.
 ## Stack
 
 - **Swift + SwiftUI + AppKit** (no Electron, no web view)
-- **macOS 14+** deployment target (`.glassEffect()` Liquid Glass on macOS 26)
+- **macOS 14+** deployment target. Picker chrome is an `NSVisualEffectView`
+  blur (`.hudWindow`), which the system renders with Liquid Glass on macOS
+  26 automatically — there is **no** `.glassEffect()` call or version-gated
+  code path.
+- **Menu-bar agent** — `LSUIElement` (no Dock icon); activation policy
+  flips to `.regular` only while Settings is open. There is no SwiftUI
+  `Settings {}` scene (it won't open for an `LSUIElement` app) — Settings
+  is a hand-built `NSWindow` + `NSToolbar`, see `SettingsWindowController.swift`.
 - **XcodeGen** generates `Junction.xcodeproj` from `project.yml` — the .xcodeproj is **not** committed
 - **No SPM / no external runtime dependencies** — only Apple frameworks
 - **SwiftLint** runs as a build-time preBuildScript; config in `.swiftlint.yml`
@@ -39,27 +47,51 @@ local dev. A proper Developer ID is the M7 milestone (open).
 ## Repo layout
 
 ```
-Sources/Junction/              # All app source
-├── JunctionApp.swift          # @main, scenes
-├── AppDelegate.swift          # URL receiving (both modern + Apple Event)
-├── PickerController.swift     # Borderless picker window lifecycle
-├── PickerView.swift           # Picker UI
-├── RulesSettingsView.swift    # Settings → Rules tab (two-pane)
-├── RuleEditorView.swift       # Inline editor in the right pane
-├── HostChipMatcher.swift      # regex ↔ chip list conversion
-├── Router.swift               # The dispatcher
-├── RuleStore.swift            # rules.json persistence + FileWatcher
-├── ...                        # everything else is named what it is
+Sources/Junction/              # All app source (~7k LOC, 38 files)
+│  # ── Lifecycle / URL intake ────────────────────────────────
+├── JunctionApp.swift          # @main
+├── AppDelegate.swift          # URL receiving (modern open + kAEGetURL Apple Event)
+├── MenuBarController.swift    # NSStatusItem menu; activation-policy flips
+├── LoginItemSettings.swift    # launch-at-login via SMAppService
+│  # ── The routing pipeline (pure where possible) ────────────
+├── Router.swift               # The dispatcher: scheme guard → rewrite → handoff → rules → picker
+├── URLRewriter.swift          # Tracking-param strip (glob → regex). Pure.
+├── AppHandoff.swift           # Native-app handoff URL transforms (Zoom, …). Pure.
+├── RuleEvaluator.swift        # Matches a URL (+ source app) against rules. Pure.
+├── Rule.swift                 # Rule / Matcher / Target models + Codable (+ legacy migration)
+├── HostChipMatcher.swift      # Matcher ↔ host-chip list conversion (for the editor)
+├── RuleStore.swift            # rules.json persistence + live reload via FileWatcher
+├── FileWatcher.swift          # DispatchSource watch on the *parent dir* (survives atomic rename)
+│  # ── Browser / profile / source-app detection ──────────────
+├── BrowserDetector.swift      # Launch Services query + manual/extra/hide lists
+├── ProfileDetector.swift      # Chromium Local State + Firefox profiles.ini parsing
+├── ManualBrowserList.swift    # user-added browsers (UserDefaults)
+├── BrowserHideList / BrowserExtraList / SourceAppList.swift
+│  # ── Picker ─────────────────────────────────────────────────
+├── PickerController.swift     # Borderless panel lifecycle
+├── PickerView.swift           # Picker UI + NSVisualEffectView bridge
+│  # ── Settings (NSWindow + NSToolbar, one view per tab) ──────
+├── SettingsWindowController.swift  # window/toolbar + SettingsCoordinator (cross-tab)
+├── RulesSettingsView.swift / RuleEditorView*.swift / RulesSidebarRows.swift / RulesGrouping.swift
+├── BrowsersSettingsView.swift / HandoffSettingsView.swift / AdvancedSettingsView.swift
+├── *Settings.swift            # Appearance / Rewriter / AppHandoff / LoginItem prefs (UserDefaults)
+│  # ── Activity log ───────────────────────────────────────────
+├── URLLog.swift               # Observable log, JSONL persistence (Application Support)
+├── DebugLogView.swift / ActivityRow.swift   # Activity tab UI
+├── ActivitySuggestions.swift  # "N× this week → Browser" pill + "Make it a rule?" banner. Pure + dismissal store.
 └── Assets.xcassets/           # AppIcon lives here
 
-Tests/JunctionTests/           # XCTest suite — 34 tests, ~24ms
-design/                        # Icon SVG, render scripts, design handoff
+Tests/JunctionTests/           # XCTest suite — 111 tests across 7 files:
+  # RuleEvaluator 32 · AppHandoff 18 · RuleCodable 17 · URLRewriter 14 ·
+  # HostChipMatcher 13 · ActivitySuggestions 12 · URLLogCodable 5
+design/                        # Icon SVG, render scripts, design handoffs
   ├── render_icon.swift        # SF Symbol → PNG renderer
   ├── set_default_browser.swift  # bypass for ad-hoc-signing's default-browser limitation
   ├── icon-branch.svg          # current icon source
   ├── BRIEF.md                 # what to paste into Claude for design work
-  └── handoff/                 # design handoff zip contents
-.github/workflows/             # CodeQL + tests CI
+  ├── handoff/                 # first design handoff
+  └── handoff_round2/          # Round 2 handoff (Activity, sidebar, Handoff, Browsers, Advanced)
+.github/workflows/             # CodeQL + Test (xcodebuild) CI
 ```
 
 User runtime data:
@@ -71,18 +103,19 @@ User runtime data:
 
 - **`main`** — release branch. Linear history enforced; no force-push, no
   deletion. Direct push allowed (no PR review required since solo).
-- **`polish/<topic>`** — small standalone changes (icon, polish, single
-  feature). Squash-merged into main.
-- **`redesign/<name>`** — branches for the Claude Design handoff redesign.
-  Each phase has its own branch (`redesign/icon-branch`,
-  `redesign/picker-v2`, `redesign/rules-two-pane`).
-- **`redesign/all`** — the kitchen-sink combination branch for dogfooding.
-  Not for PR; merge target for all three redesign branches.
-- **`chore/<topic>`** — non-feature cleanup work.
+- **`feat/<topic>`** — new features (`feat/launch-at-login`,
+  `feat/activity-suggestion-counter`, …). One logical change per branch.
+- **`fix/<topic>`** — bug fixes.
+- **`docs/<topic>`, `chore/<topic>`** — docs and non-feature cleanup.
 
 PRs are open but not blocking — branch protection requires linear history
-on main but not reviewers. The user merges via gh CLI when ready
-(`gh pr merge N --squash --delete-branch`).
+on main but not reviewers. The user merges via gh CLI when CI is green
+(`gh pr merge N --rebase --delete-branch`; `--squash` also works since both
+keep history linear).
+
+**Stacked PRs:** when a branch is based on another open branch, retarget
+the downstream PR's base to `main` *before* merging the upstream one —
+otherwise GitHub auto-closes it. Then rebase + `--force-with-lease`.
 
 ## Common gotchas (in order of how much time they've cost)
 
@@ -111,11 +144,14 @@ Mitigations already in place:
 If duplicates show up anyway: use `lsregister -u <path>` to unregister, then
 delete the file.
 
-### macOS 26 Liquid Glass APIs
+### Picker blur is NSVisualEffectView, not `.glassEffect()`
 
-`Glass.regular`, `.glassEffect(_:in:)`, etc. exist only on macOS 26+. Guard
-with `if #available(macOS 26.0, *)`. Helpers in `GlassEffect.swift` on
-the polish/liquid-glass branch (open PR #7 at time of writing).
+The picker chrome is an `NSVisualEffectView` with the `.hudWindow` material
+(`VisualEffectBackground` in `PickerView.swift`). On macOS 26 the system
+composites that material with Liquid Glass for free — so we get the look
+without calling the macOS 26-only `.glassEffect(_:in:)` API or branching on
+`#available(macOS 26.0, *)`. If you ever do reach for those APIs, guard
+them; right now the codebase calls **no** macOS 26-only API.
 
 ### XcodeGen requires regeneration after project.yml changes
 
@@ -154,11 +190,14 @@ isn't numbered — it's the Claude Design handoff retrofit. See
 
 ## What's tracked elsewhere
 
-- **README.md** — user-facing description, install steps. Polish for
-  sharing is task #29 (still pending at time of writing).
-- **SPEC.md** — full technical design.
+- **README.md** — user-facing description, install steps, feature list.
+- **SPEC.md** — the *original* pre-code design doc. Useful for intent, but
+  some of it is aspirational (shortener expansion, Sparkle auto-update,
+  CLI) and never shipped — trust this file + the code for current state.
 - **design/BRIEF.md** — what to paste into Claude when asking for design help.
-- **GitHub Issues** — feature backlog. #10 native-app handoff, #11 default-set quirk, #13 Safari profiles.
+- **GitHub Issues** — remaining backlog: #11 (https-only default-set
+  quirk), #13 (Safari profiles, blocked on Apple API). Native-app handoff
+  (#10) shipped but the issue is kept open as the tracking umbrella.
 
 ## Commit style
 
