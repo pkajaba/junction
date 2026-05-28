@@ -83,6 +83,13 @@ final class URLLog: ObservableObject {
     /// small (a few hundred KB).
     private static let maxEntries = 1000
 
+    /// Time-based retention: entries older than this are dropped on load
+    /// and on every append. Keeps the log from accumulating an unbounded
+    /// browsing-history trail in plaintext even on a low-traffic machine
+    /// that never hits the count cap. 90 days is generous for a
+    /// recent-history view.
+    static let maxAge: TimeInterval = 90 * 24 * 60 * 60
+
     @Published private(set) var entries: [Entry] = []
 
     private init() {
@@ -98,13 +105,32 @@ final class URLLog: ObservableObject {
     /// where to send it, focus may have shifted.
     @discardableResult
     func append(_ url: URL, source: Source, sourceApp: String? = nil) -> UUID {
-        let entry = Entry(url: url, source: source, sourceApp: sourceApp, receivedAt: Date())
+        // Redact secret-bearing query params before the URL ever touches
+        // memory or disk (Zoom pwd=, OAuth tokens, password-reset links, …).
+        let entry = Entry(
+            url: SensitiveURLRedactor.redact(url),
+            source: source,
+            sourceApp: sourceApp,
+            receivedAt: Date()
+        )
         entries.append(entry)
-        if entries.count > Self.maxEntries {
-            entries.removeFirst(entries.count - Self.maxEntries)
-        }
+        // Drop expired entries, then cap to the most recent `maxEntries`.
+        entries = Self.retained(entries, now: Date(), maxAge: Self.maxAge, maxEntries: Self.maxEntries)
         persist()
         return entry.id
+    }
+
+    /// Drop entries older than `maxAge`, then keep only the most recent
+    /// `maxEntries` (oldest first preserved order). Pure + `nonisolated` so
+    /// retention is unit-testable without touching the singleton or disk.
+    nonisolated static func retained(
+        _ entries: [Entry],
+        now: Date,
+        maxAge: TimeInterval,
+        maxEntries: Int
+    ) -> [Entry] {
+        let cutoff = now.addingTimeInterval(-maxAge)
+        return Array(entries.filter { $0.receivedAt >= cutoff }.suffix(maxEntries))
     }
 
     /// Mutate the routing field of an existing entry, optionally also
@@ -127,7 +153,7 @@ final class URLLog: ObservableObject {
     /// Called only when the rewriter actually changed the URL.
     func updateRewritten(for id: UUID, to rewritten: URL, strippedParams: [String] = []) {
         guard let idx = entries.firstIndex(where: { $0.id == id }) else { return }
-        entries[idx].rewritten = rewritten
+        entries[idx].rewritten = SensitiveURLRedactor.redact(rewritten)
         entries[idx].strippedParams = strippedParams
         persist()
     }
@@ -176,7 +202,9 @@ final class URLLog: ObservableObject {
             guard let data = line.data(using: .utf8) else { return nil }
             return try? decoder.decode(Entry.self, from: data)
         }
-        entries = Array(decoded.suffix(Self.maxEntries))
+        // Apply both retention bounds on load so a stale file is trimmed
+        // (and old plaintext history aged out) the moment Junction starts.
+        entries = Self.retained(decoded, now: Date(), maxAge: Self.maxAge, maxEntries: Self.maxEntries)
     }
 
     /// Snapshot the (value-type) array on the main actor, then write it
