@@ -111,10 +111,11 @@ struct TrackingParamPattern: Equatable {
         if pattern.contains("*") {
             let escaped = NSRegularExpression.escapedPattern(for: pattern)
                 .replacingOccurrences(of: "\\*", with: ".*")
-            self.regex = try? NSRegularExpression(
-                pattern: "^\(escaped)$",
-                options: [.caseInsensitive]
-            )
+            // Compile through SafeRegex for the pattern-length cap + shared
+            // cache. The resulting glob regex is anchored (`^…$`) and only
+            // ever runs against short query-param names, so it's not
+            // ReDoS-prone — inline matching below is fine (no budget worker).
+            self.regex = SafeRegex.compile("^\(escaped)$")
         } else {
             self.regex = nil
         }

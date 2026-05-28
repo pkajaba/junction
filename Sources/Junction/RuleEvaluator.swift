@@ -76,12 +76,10 @@ struct RuleEvaluator {
     }
 
     private static func hostMatchesRegex(_ host: String?, pattern: String) -> Bool {
-        guard
-            let host = host,
-            !host.isEmpty,
-            let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
-        else { return false }
-        let range = NSRange(host.startIndex..<host.endIndex, in: host)
-        return regex.firstMatch(in: host, options: [], range: range) != nil
+        guard let host = host, !host.isEmpty else { return false }
+        // `hostRegex` is arbitrary user-authored regex run against a host
+        // any site can craft — route it through `SafeRegex` so a
+        // pathological pattern is length-capped and time-bounded (ReDoS).
+        return SafeRegex.matches(pattern: pattern, input: host)
     }
 }
