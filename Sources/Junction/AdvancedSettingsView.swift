@@ -14,6 +14,7 @@ struct AdvancedSettingsView: View {
 
     @ObservedObject private var rewriter = RewriterSettings.shared
     @ObservedObject private var appearance = AppearanceSettings.shared
+    @ObservedObject private var loginItem = LoginItemSettings.shared
 
     @State private var draftParam: String = ""
     @FocusState private var addFieldFocused: Bool
@@ -24,12 +25,66 @@ struct AdvancedSettingsView: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
+                    launchAtLoginCard
                     appearanceCard
                     trackingSection
                 }
                 .padding(20)
             }
         }
+        // Re-sync the login-item toggle in case the user changed it in
+        // System Settings while Junction was running.
+        .onAppear { loginItem.refresh() }
+    }
+
+    // MARK: - Launch at login
+
+    private var launchAtLoginCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Launch at login")
+                        .font(.system(size: 13, weight: .medium))
+                    Text("Start Junction automatically when you log in, so links "
+                         + "route from the moment you sign in.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { loginItem.isEnabled },
+                    set: { loginItem.setEnabled($0) }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .accessibilityLabel("Launch Junction at login")
+            }
+            if loginItem.requiresApproval {
+                Label(
+                    "Approve Junction in System Settings → General → Login Items to finish.",
+                    systemImage: "exclamationmark.triangle"
+                )
+                .font(.system(size: 11))
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            if let error = loginItem.lastError {
+                Label(error, systemImage: "xmark.octagon")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.primary.opacity(0.025))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
+        )
     }
 
     private var header: some View {
