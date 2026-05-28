@@ -1,6 +1,14 @@
 # Junction — Technical Spec
 
-This document describes Junction's architecture and design decisions. It's deliberately written before any Swift code so we have something to push against, not just react to. It will evolve.
+This document was written **before any Swift code** as a design target. It
+captures intent and the core architecture, most of which shipped as
+described. But it has **not** fully kept pace with the implementation — some
+ideas here are aspirational and were never built (notably: shortener
+expansion, custom regex rewrites, Sparkle auto-update, the CLI companion).
+For the authoritative current picture, trust the code plus
+[README.md](./README.md) (user-facing) and [CLAUDE.md](./CLAUDE.md)
+(contributor/codebase orientation). Inline **Status:** notes below mark the
+biggest drifts.
 
 ## Goals
 
@@ -23,8 +31,8 @@ This document describes Junction's architecture and design decisions. It's delib
 1. App calls `LSOpenURL` (or equivalent) with the link.
 2. macOS dispatches a GetURL Apple Event to the registered default browser → **Junction**.
 3. Junction matches the URL against the user's rule list.
-4. **Match → silent route.** `open -na "<browser>" --args --profile-directory=<X> <url>` (or equivalent per browser).
-5. **No match → picker.**
+4. **Match → silent route.** Opens via `NSWorkspace.open([url], withApplicationAt:configuration:)` with `configuration.arguments` carrying the per-browser profile flag (`--profile-directory=<X>` for Chromium, `-P <name>` for Firefox). _Status: shipped this way — **not** via the `open -na` CLI sketched in an earlier draft._
+5. **No match → picker.** (Native-app handoff, when enabled for an installed app, actually takes priority over rules — see "URL rewriting" / `Router.swift`.)
 
 ### 2. Picker
 - Borderless window centered on the active display, dismissable with `Esc`.
@@ -47,26 +55,35 @@ This document describes Junction's architecture and design decisions. It's delib
 
 ### Rule (Swift sketch)
 
+_Status: this sketch has been superseded by the shipped model in
+`Rule.swift`. The current shape is below._
+
 ```swift
 struct Rule: Codable, Identifiable {
     let id: UUID
-    var name: String                   // human-readable, optional
+    var name: String                   // human-readable
     var enabled: Bool = true
     var match: Matcher                 // see below
     var target: Target                 // browser + profile + args
+    var sourceApps: [String] = []      // bundle IDs the link must come *from*;
+                                       // empty = any opener. (Migrates from a
+                                       // legacy singular `sourceApp` key.)
 }
 
 enum Matcher: Codable {
     case host(String)                  // "github.com" matches host or *.host
-    case hostRegex(String)             // arbitrary regex on host
-    case urlContains(String)           // substring on full URL
-    case predicate(String)             // future: structured predicate language
+    case hostRegex(String)             // arbitrary case-insensitive regex on host
+    case urlContains(String)           // case-insensitive substring on full URL
+    case urlPrefix(String)             // anchored, case-insensitive prefix on full URL
+                                       // (what the editor builds from a path chip)
+    case any                           // matches every URL — for source-app-only rules
+    // NOTE: the `.predicate` case sketched in the original draft was never built.
 }
 
 struct Target: Codable {
     var browserBundleID: String        // e.g. "com.google.Chrome"
     var profile: String?               // e.g. "Default" for Chrome, "personal" for Firefox
-    var extraArgs: [String] = []
+    var extraArgs: [String] = []       // appended to launch args (no UI; hand-edit rules.json)
     var openInNewWindow: Bool = false
 }
 ```
@@ -125,13 +142,21 @@ Profile detection runs once at app launch and on settings open; cached otherwise
 
 ## URL rewriting
 
-Optional pre-routing transforms, applied in order:
+Optional pre-routing transforms:
 
-1. **Shortener expansion** — `t.co`, `bit.ly`, etc.: `HEAD` request, follow `Location` header (max 5 hops, 2s timeout). Off by default; opt-in per shortener.
-2. **Tracking param strip** — remove `utm_*`, `fbclid`, `gclid`, etc. (configurable allowlist of *what to strip*).
-3. **Custom rewrites** — user-defined regex find/replace.
+1. **Tracking param strip** — remove `utm_*`, `fbclid`, `gclid`, etc.
+   (configurable allowlist of *what to strip*, with `*` globs). _Status:
+   **shipped** — `URLRewriter.swift`, configured in Settings → Advanced._
+2. **Native-app handoff** — rewrite a matching web URL to a native scheme
+   (`https://…zoom.us/j/…` → `zoommtg://…`) and open the app instead.
+   _Status: **shipped** — `AppHandoff.swift`; runs before rules._
+3. **Shortener expansion** — `t.co`, `bit.ly`, etc. via a `HEAD` request.
+   _Status: **not built** (would be the only network call in the app;
+   deliberately deferred to keep Junction fully offline)._
+4. **Custom rewrites** — user-defined regex find/replace. _Status: **not built**._
 
-All transforms are pure functions; the resulting URL is what gets matched against rules and opened.
+All shipped transforms are pure, local, synchronous value functions; the
+resulting URL is what gets matched against rules and opened.
 
 ## Picker window
 
@@ -145,9 +170,13 @@ All transforms are pure functions; the resulting URL is what gets matched agains
 
 ## Signing & distribution
 
+_Status: **not yet shipped** — this is the final pre-v0.1 milestone, gated
+on an Apple Developer ID. Today's builds are ad-hoc-signed with the
+hardened runtime on and no entitlements file. Sparkle is not integrated._
+
 - Apple Developer ID Application certificate
 - Hardened runtime + notarization
-- Sparkle 2.x for auto-update (EdDSA signed appcasts)
+- Sparkle 2.x for auto-update (EdDSA signed appcasts) — _planned, not integrated_
 - Homebrew cask in `homebrew-cask` (after a few minor releases) — until then, in a tap: `pkajaba/tap`
 - Direct `.dmg` download from GitHub Releases
 
