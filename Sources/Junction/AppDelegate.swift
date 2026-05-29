@@ -34,6 +34,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // MARK: - Reopen / activation guard
+
+    /// Junction is a menu-bar agent with no primary window. Its only
+    /// SwiftUI scene is the placeholder `Settings { EmptyView() }` (the
+    /// real Settings is a hand-built `NSWindow`). When the app is
+    /// *reactivated* with no visible window — e.g. macOS reopening the
+    /// already-running default browser to hand it a link — AppKit's default
+    /// reopen handling tries to surface "a" window, and the only scene it
+    /// can open is that placeholder Settings window. That's the stray
+    /// Settings panel that flashed up on link clicks.
+    ///
+    /// Returning `false` suppresses the automatic behavior. The picker and
+    /// the real Settings window are both shown explicitly via
+    /// `makeKeyAndOrderFront`, so nothing the user actually wants is lost.
+    func applicationShouldHandleReopen(
+        _ sender: NSApplication,
+        hasVisibleWindows flag: Bool
+    ) -> Bool {
+        false
+    }
+
     // MARK: - Modern API
 
     /// Called by AppKit when one or more URLs are handed to us — for example
