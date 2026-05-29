@@ -21,6 +21,11 @@ struct PickerView: View {
     @FocusState private var hasFocus: Bool
     @State private var modifierMonitor: Any?
 
+    /// Panel corner radius. Shared by the SwiftUI clip/border *and* the
+    /// visual-effect view's mask so the blur, content, and stroke all round
+    /// to the same shape.
+    private static let panelCornerRadius: CGFloat = 26
+
     // Accessibility: faint hairlines disappear under Increase Contrast and
     // under Reduce Transparency (where the panel goes opaque and a 0.5 pt
     // edge stops reading). Bump edge weight in those modes.
@@ -48,9 +53,9 @@ struct PickerView: View {
         }
         .frame(width: 560)
         .background(panelBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: Self.panelCornerRadius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
+            RoundedRectangle(cornerRadius: Self.panelCornerRadius, style: .continuous)
                 .strokeBorder(panelBorderColor, lineWidth: panelBorderWidth)
         )
         .shadow(color: Color.black.opacity(0.28), radius: 30, y: 16)
@@ -84,7 +89,18 @@ struct PickerView: View {
         // you see through it, it doesn't go milky. `.hudWindow` is the
         // material macOS uses for floating HUD panels; it's neutral and
         // adapts to light/dark. On macOS 26 it composites with Liquid Glass.
-        VisualEffectBackground(material: .hudWindow, blendingMode: .behindWindow)
+        //
+        // `cornerRadius` matches the SwiftUI clipShape below. It's applied
+        // as the visual-effect view's `maskImage`, because a
+        // `.behindWindow` blur is composited by the WindowServer across the
+        // whole window rect — SwiftUI's `.clipShape` can't round it, so
+        // without the mask the blurred corners read as square behind the
+        // rounded content.
+        VisualEffectBackground(
+            material: .hudWindow,
+            blendingMode: .behindWindow,
+            cornerRadius: Self.panelCornerRadius
+        )
     }
 
     // MARK: - URL bar
@@ -480,30 +496,6 @@ private struct HostFavicon: View {
                 )
             )
             .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-    }
-}
-
-// MARK: - NSVisualEffectView bridge
-
-/// SwiftUI wrapper for `NSVisualEffectView` so we can use the same blur
-/// material the system Settings windows and menus use. Backed by AppKit,
-/// works on every supported macOS version.
-private struct VisualEffectBackground: NSViewRepresentable {
-    let material: NSVisualEffectView.Material
-    let blendingMode: NSVisualEffectView.BlendingMode
-
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = material
-        view.blendingMode = blendingMode
-        view.state = .active
-        view.isEmphasized = true
-        return view
-    }
-
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
-        nsView.material = material
-        nsView.blendingMode = blendingMode
     }
 }
 
