@@ -53,4 +53,37 @@ final class SensitiveURLRedactorTests: XCTestCase {
         XCTAssertTrue(out.contains("state=REDACTED"))
         XCTAssertTrue(out.contains("id=keep"))
     }
+
+    // MARK: - Fragment (OAuth implicit flow)
+
+    func test_redactsTokensInFragment() {
+        let out = redacted(
+            "https://app.example.com/cb#access_token=ABC123&token_type=bearer&expires_in=3600"
+        )
+        XCTAssertTrue(out.contains("access_token=REDACTED"))
+        XCTAssertFalse(out.contains("ABC123"))
+        XCTAssertTrue(out.contains("token_type=bearer"))
+        XCTAssertTrue(out.contains("expires_in=3600"))
+    }
+
+    func test_nonKeyValueFragmentIsUnchanged() {
+        let url = URL(string: "https://example.com/docs#section-2")!
+        XCTAssertEqual(SensitiveURLRedactor.redact(url), url)
+    }
+
+    // MARK: - Embedded credentials & signed-URL params
+
+    func test_redactsEmbeddedPassword() {
+        let out = redacted("https://alice:hunter2@example.com/inbox")
+        XCTAssertFalse(out.contains("hunter2"))
+        XCTAssertTrue(out.contains("alice"))            // username kept
+        XCTAssertTrue(out.contains("example.com/inbox"))
+    }
+
+    func test_redactsSignedURLSignature() {
+        let out = redacted("https://s3.example.com/o?X-Amz-Signature=deadbeef&X-Amz-Expires=60")
+        XCTAssertTrue(out.contains("X-Amz-Signature=REDACTED"))
+        XCTAssertFalse(out.contains("deadbeef"))
+        XCTAssertTrue(out.contains("X-Amz-Expires=60"))
+    }
 }

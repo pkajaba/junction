@@ -15,6 +15,7 @@ struct AdvancedSettingsView: View {
     @ObservedObject private var rewriter = RewriterSettings.shared
     @ObservedObject private var appearance = AppearanceSettings.shared
     @ObservedObject private var loginItem = LoginItemSettings.shared
+    @ObservedObject private var activityLog = ActivityLogSettings.shared
 
     @State private var draftParam: String = ""
     @FocusState private var addFieldFocused: Bool
@@ -27,6 +28,7 @@ struct AdvancedSettingsView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     launchAtLoginCard
                     appearanceCard
+                    activityLogCard
                     trackingSection
                 }
                 .padding(20)
@@ -114,6 +116,41 @@ struct AdvancedSettingsView: View {
             Spacer()
             Picker("", selection: $appearance.appearance) {
                 ForEach(AppearanceSettings.Appearance.allCases) { option in
+                    Text(option.label).tag(option)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .fixedSize()
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.primary.opacity(0.025))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
+        )
+    }
+
+    // MARK: - Activity log card
+
+    private var activityLogCard: some View {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Activity log retention")
+                    .font(.system(size: 13, weight: .medium))
+                Text("How long the Activity tab keeps entries. Secret URL params "
+                     + "(passwords, tokens, sign-in codes) are always redacted before "
+                     + "anything is logged or exported.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Picker("", selection: $activityLog.retention) {
+                ForEach(ActivityLogSettings.Retention.allCases) { option in
                     Text(option.label).tag(option)
                 }
             }

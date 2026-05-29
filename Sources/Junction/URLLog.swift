@@ -83,12 +83,12 @@ final class URLLog: ObservableObject {
     /// small (a few hundred KB).
     private static let maxEntries = 1000
 
-    /// Time-based retention: entries older than this are dropped on load
-    /// and on every append. Keeps the log from accumulating an unbounded
+    /// Time-based retention window: entries older than this are dropped on
+    /// load and on every append, so the log doesn't accumulate an unbounded
     /// browsing-history trail in plaintext even on a low-traffic machine
-    /// that never hits the count cap. 90 days is generous for a
-    /// recent-history view.
-    static let maxAge: TimeInterval = 90 * 24 * 60 * 60
+    /// that never hits the count cap. User-configurable in Settings →
+    /// Advanced (default 90 days); read live from `ActivityLogSettings`.
+    private var maxAge: TimeInterval { ActivityLogSettings.shared.retention.maxAge }
 
     @Published private(set) var entries: [Entry] = []
 
@@ -115,9 +115,20 @@ final class URLLog: ObservableObject {
         )
         entries.append(entry)
         // Drop expired entries, then cap to the most recent `maxEntries`.
-        entries = Self.retained(entries, now: Date(), maxAge: Self.maxAge, maxEntries: Self.maxEntries)
+        entries = Self.retained(entries, now: Date(), maxAge: maxAge, maxEntries: Self.maxEntries)
         persist()
         return entry.id
+    }
+
+    /// Re-apply the (possibly just-shrunk) retention window to the
+    /// in-memory log. Called by `ActivityLogSettings` when the user picks a
+    /// shorter window so the change takes effect immediately, not just on
+    /// the next received URL.
+    func applyRetention() {
+        let trimmed = Self.retained(entries, now: Date(), maxAge: maxAge, maxEntries: Self.maxEntries)
+        guard trimmed.count != entries.count else { return }
+        entries = trimmed
+        persist()
     }
 
     /// Drop entries older than `maxAge`, then keep only the most recent
@@ -204,7 +215,7 @@ final class URLLog: ObservableObject {
         }
         // Apply both retention bounds on load so a stale file is trimmed
         // (and old plaintext history aged out) the moment Junction starts.
-        entries = Self.retained(decoded, now: Date(), maxAge: Self.maxAge, maxEntries: Self.maxEntries)
+        entries = Self.retained(decoded, now: Date(), maxAge: maxAge, maxEntries: Self.maxEntries)
     }
 
     /// Snapshot the (value-type) array on the main actor, then write it
