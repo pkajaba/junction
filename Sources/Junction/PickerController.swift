@@ -143,6 +143,20 @@ final class PickerController: NSObject {
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         window.isMovable = false
         window.isReleasedWhenClosed = false
+
+        // Round the contentView's layer to the same radius as the SwiftUI
+        // panel. The hosting view fills the *square* borderless window;
+        // its SwiftUI content is clipped round, but the hosting layer's
+        // own edge still squares off the corners — showing as a thin
+        // square hairline just outside the rounded panel. Clipping the
+        // contentView to the panel radius removes that edge (the masked
+        // blur and the window's shadow already follow the same curve).
+        if let contentView = window.contentView {
+            contentView.wantsLayer = true
+            contentView.layer?.cornerRadius = PickerView.panelCornerRadius
+            contentView.layer?.cornerCurve = .continuous
+            contentView.layer?.masksToBounds = true
+        }
         return window
     }
 
