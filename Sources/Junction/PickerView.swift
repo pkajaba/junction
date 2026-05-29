@@ -21,10 +21,11 @@ struct PickerView: View {
     @FocusState private var hasFocus: Bool
     @State private var modifierMonitor: Any?
 
-    /// Panel corner radius. Shared by the SwiftUI clip/border *and* the
-    /// visual-effect view's mask so the blur, content, and stroke all round
-    /// to the same shape.
-    private static let panelCornerRadius: CGFloat = 26
+    /// Panel corner radius. Shared by the SwiftUI clip/border, the
+    /// visual-effect view's mask, *and* the window's contentView layer
+    /// rounding (in `PickerController`) so the blur, content, stroke, and
+    /// the window edge all round to the same shape.
+    static let panelCornerRadius: CGFloat = 26
 
     // Accessibility: faint hairlines disappear under Increase Contrast and
     // under Reduce Transparency (where the panel goes opaque and a 0.5 pt
