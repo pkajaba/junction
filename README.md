@@ -8,9 +8,7 @@ define. No rule? A fast keyboard-driven picker lets you choose.
 > there's no one-click installer — build from source for now (it's quick).
 > A signed Homebrew cask is the last milestone before v0.1.
 
-<!-- Drop captures into docs/screenshots/, then uncomment — see docs/screenshots/CAPTURE.md
-![The picker](docs/screenshots/picker.png)
--->
+![The Junction picker](docs/screenshots/picker.png)
 
 ---
 
@@ -85,19 +83,52 @@ your way here from one of those threads, that's why.
 
 ## Screenshots
 
-_Coming — see [`docs/screenshots/CAPTURE.md`](docs/screenshots/CAPTURE.md)
-for the shot list._
-
-<!-- Uncomment as docs/screenshots/ is populated:
 ### The picker
-![Picker](docs/screenshots/picker.png)
 
-### Rules — two-pane editor
-![Rules](docs/screenshots/rules.png)
+No rule matched, so Junction asks — keyboard-first (number keys, arrows,
+`↩`), or pin a row (`⌥↩`) to turn the choice into a saved rule.
+
+![The picker](docs/screenshots/picker.png)
+
+### Rules
+
+A two-pane editor: grouped rules on the left, an inline host-chip matcher +
+live URL tester on the right.
+
+![Settings — Rules](docs/screenshots/rules.png)
 
 ### Native-app handoff
-![Handoff](docs/screenshots/handoff.png)
--->
+
+Send matching links straight to a native app instead of a browser — each
+toggle enabled only when the app is installed.
+
+![Settings — Handoff](docs/screenshots/handoff.png)
+
+### Advanced
+
+Launch at login, theme, Activity-log retention (secrets are always redacted
+before anything is logged), and the tracking-parameter strip list.
+
+![Settings — Advanced](docs/screenshots/advanced.png)
+
+<details>
+<summary>More — Browsers &amp; Activity</summary>
+
+#### Browsers
+
+Toggle which browsers show in the picker; add ones Junction didn't
+auto-detect.
+
+![Settings — Browsers](docs/screenshots/browsers.png)
+
+#### Activity
+
+Every link Junction has handled, with the outcome (rule match / picker /
+handoff) and one-click "make it a rule."
+
+![Settings — Activity](docs/screenshots/activity.png)
+
+</details>
 
 ## Install
 
