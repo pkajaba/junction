@@ -98,10 +98,18 @@ final class PickerController: NSObject {
         // `windowDidResignKey` is the dependable signal: any click that
         // hands focus to another window (ours or someone else's) takes
         // key status away from the picker, and that's exactly the
-        // "dismiss me" moment. Activating the app + ordering the window
-        // front first ensures the window IS key before we start
-        // observing — otherwise we'd see a spurious resign on activation.
+        // "dismiss me" moment.
         centerOnActiveDisplay(window: window)
+        // Order the picker on screen BEFORE activating the app. Junction is
+        // a menu-bar agent whose only SwiftUI scene is the placeholder
+        // `Settings` window; if we activate while the app has no visible
+        // window, AppKit surfaces that scene — the stray Settings panel
+        // users saw on link clicks. Having the picker up first gives
+        // activation a real window to focus, so Settings never auto-opens.
+        // We re-key after activating so the picker is reliably key before
+        // we start observing resign (otherwise activation could fire a
+        // spurious resign and instantly cancel the picker).
+        window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         resignKeyObserver = NotificationCenter.default.addObserver(
