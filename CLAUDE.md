@@ -84,13 +84,14 @@ Sources/Junction/              # All app source (~7k LOC, 38 files)
 Tests/JunctionTests/           # XCTest suite — 111 tests across 7 files:
   # RuleEvaluator 32 · AppHandoff 18 · RuleCodable 17 · URLRewriter 14 ·
   # HostChipMatcher 13 · ActivitySuggestions 12 · URLLogCodable 5
-design/                        # Icon SVG, render scripts, design handoffs
-  ├── render_icon.swift        # SF Symbol → PNG renderer
+design/                        # Icon source + render scripts + design brief
+  ├── icon-branch.svg          # current icon source (the shipped "Branch" mark)
+  ├── icon_master_branch.png   # 1024 render of icon-branch.svg (asset-catalog source)
+  ├── render_icon.swift        # SF Symbol → PNG renderer (general utility)
   ├── set_default_browser.swift  # bypass for ad-hoc-signing's default-browser limitation
-  ├── icon-branch.svg          # current icon source
-  ├── BRIEF.md                 # what to paste into Claude for design work
-  ├── handoff/                 # first design handoff
-  └── handoff_round2/          # Round 2 handoff (Activity, sidebar, Handoff, Browsers, Advanced)
+  └── BRIEF.md                 # what to paste into Claude for design work
+  # (the original design-handoff bundles + rejected icon explorations were
+  #  pruned to keep the repo light — still in git history if needed)
 .github/workflows/             # CodeQL + Test (xcodebuild) CI
 ```
 
@@ -185,8 +186,10 @@ rendering to normalize before placing into the AppIcon appiconset.
 
 M1–M6 are merged. M7 (sign + notarize + ship via Homebrew cask) is open
 and blocked on the user getting an Apple Developer ID. The redesign work
-isn't numbered — it's the Claude Design handoff retrofit. See
-`design/handoff/` for the brief.
+isn't numbered — it was the Claude Design handoff retrofit (Branch icon,
+v2 picker, two-pane Rules, plus the Round 2 Activity/Settings pass). The
+handoff bundles themselves have been pruned from the repo; `design/BRIEF.md`
+is the remaining design reference.
 
 ## What's tracked elsewhere
 

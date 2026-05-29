@@ -145,9 +145,12 @@ Functional placeholder; not a hero brand mark. Could be evolved.
 
 | File | What |
 | --- | --- |
-| `design/icon_master.png` | Current app icon at 1024×1024 |
-| `design/sfA.png`, `sfB.png`, `sfC.png` | Three icon candidates evaluated; C shipped |
-| `design/icon.svg` | An earlier hand-drawn "J with junction kicker" concept that didn't land |
+| `design/icon-branch.svg` | **Source** for the shipped "Branch" icon — hand-drawn SVG |
+| `design/icon_master_branch.png` | 1024×1024 render of the Branch icon (the asset-catalog source) |
+
+(Earlier rejected explorations — a "J with junction kicker" SVG, a signpost
+render, and three SF-Symbol candidates — were pruned from the repo but
+remain in git history.)
 
 Screenshots of the live UI live in `design/screenshots/` (you'll create
 these as needed — see "Producing screenshots" below).

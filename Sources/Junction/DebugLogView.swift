@@ -10,9 +10,9 @@ import AppKit
 /// bar above the list narrows the view by outcome; counts on each chip
 /// surface how many entries fall into each bucket.
 ///
-/// Hover-to-create-rule + persistence + the manual-pick suggestion
-/// counter are tracked separately — see `design/handoff_round2/`. This
-/// pass lands the row shape, filter chips, and the new copy.
+/// Create-rule-from-a-row (⌘R / the per-row button), JSONL persistence,
+/// and the manual-pick suggestion pill + banner are all wired up here and
+/// in `ActivityRow.swift` / `ActivitySuggestions.swift`.
 struct DebugLogView: View {
     // URLLog.shared is the canonical, app-wide instance — observed
     // directly so the tab works standalone inside the Settings TabView.
