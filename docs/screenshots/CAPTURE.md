@@ -6,12 +6,29 @@ here with the exact filenames below, then uncomment the matching
 
 ## How to capture a window cleanly
 
-`⌘⇧4`, then press **Space** — the cursor becomes a camera. Click the
-window. macOS saves a PNG (with the drop shadow) to your Desktop. Move it
-here and rename.
+For **Settings** (and any normal window): `⌘⇧4`, then press **Space** — the
+cursor becomes a camera. Click the window. macOS saves a PNG (with the drop
+shadow) to your Desktop. Move it here and rename.
 
-For the picker (a borderless floating panel) the Space-then-click trick
-still works — click anywhere on the panel.
+### Capturing the picker (special case)
+
+The interactive `⌘⇧4`/`⌘⇧5` tools **won't work on the picker**: it's a
+floating panel that dismisses itself the instant it loses key focus (that's
+how "click anywhere else to cancel" works), and the screenshot overlay
+takes focus — so the picker vanishes before you can click it.
+
+Use a **timed** capture instead, and let the picker open *during* the
+countdown so nothing steals its focus:
+
+```bash
+# Arms a 7s timer, opens the picker after 3s, captures the full screen.
+( sleep 3 && open "https://example.com/screenshot-demo" ) & \
+  screencapture -T 7 ~/Desktop/picker.png
+```
+
+Then crop to the panel (Preview → ⌘K). Don't touch the keyboard or mouse
+during the countdown. For the ⌥-held "always" variant, hold Option as the
+timer fires.
 
 ## Shot list
 
