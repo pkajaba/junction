@@ -35,24 +35,18 @@ cp icon_master_branch.png                "$ICONS/icon_512x512@2x.png"
 cd .. && xcodegen generate
 ```
 
-## Archive — earlier explorations
-
-Kept as design history; not used by the app.
-
-| File | What it was |
-| --- | --- |
-| `icon.svg` | First concept — a stylized "J" with a forked tail. Read as "T/I + mustache"; dropped. |
-| `icon_master.png` | Render of the rejected signpost icon (`signpost.right.and.left` on slate) |
-| `sfA.png` / `sfB.png` / `sfC.png` | Three SF-Symbol candidates evaluated before the hand-drawn Branch won: `arrow.triangle.branch`, `point.3.connected.trianglepath.dotted`, `signpost.right.and.left` |
-| `render_icon.swift` | Helper that renders any SF Symbol + gradient to PNG — used during the SF-Symbol exploration |
-
 ## Other files here
 
 | File | What it is |
 | --- | --- |
 | `BRIEF.md` | Design brief — paste sections into Claude/a designer when asking for design work |
+| `render_icon.swift` | Helper that renders any SF Symbol + gradient to a PNG (used during icon exploration; kept as a general utility) |
 | `set_default_browser.swift` | Dev helper: sets Junction (or any app) as the default browser via `NSWorkspace`, bypassing the System Settings dropdown's signing filter |
-| `handoff/` | The Claude Design redesign handoff — the source of the Branch icon, v2 picker, and two-pane Rules tab |
+
+> **History note:** earlier rejected icon explorations (a "J"-with-forked-tail
+> SVG, a signpost render, and three SF-Symbol candidates) plus the original
+> Claude Design handoff bundles lived here. They were pruned to keep the repo
+> light; they remain in git history if you need them back.
 
 ## A note about Retina and `NSImage.lockFocus()`
 
