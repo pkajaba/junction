@@ -46,8 +46,10 @@ final class URLLog: ObservableObject {
 
     struct Entry: Identifiable, Equatable, Codable {
         var id = UUID()
-        /// URL as received from macOS, before any rewriting.
-        let url: URL
+        /// URL as received from macOS, reduced/redacted per the user's
+        /// Activity-log detail level. `var` so `applyDetail()` can scrub it
+        /// further in place when the user dials privacy up.
+        var url: URL
         /// URL after `URLRewriter` ran, if it changed anything. The rule
         /// engine and the open call both use this when present.
         var rewritten: URL?
@@ -105,10 +107,15 @@ final class URLLog: ObservableObject {
     /// where to send it, focus may have shifted.
     @discardableResult
     func append(_ url: URL, source: Source, sourceApp: String? = nil) -> UUID {
-        // Redact secret-bearing query params before the URL ever touches
-        // memory or disk (Zoom pwd=, OAuth tokens, password-reset links, …).
+        // Reduce/redact the URL per the user's detail level *before* it
+        // touches memory or disk. `.off` returns nil — we still hand back a
+        // UUID so the Router's later `updateRouting(for:)` calls are
+        // harmless no-ops, but record nothing.
+        guard let storedURL = ActivityLogSettings.shared.detail.storedURL(for: url) else {
+            return UUID()
+        }
         let entry = Entry(
-            url: SensitiveURLRedactor.redact(url),
+            url: storedURL,
             source: source,
             sourceApp: sourceApp,
             receivedAt: Date()
@@ -129,6 +136,31 @@ final class URLLog: ObservableObject {
         guard trimmed.count != entries.count else { return }
         entries = trimmed
         persist()
+    }
+
+    /// Re-reduce existing entries to the current detail level. Called when
+    /// the user changes the level so dialing privacy *up* scrubs already-
+    /// logged URLs immediately (e.g. switching to "Host only" strips paths
+    /// from history). `.off` clears the log entirely.
+    func applyDetail() {
+        let detail = ActivityLogSettings.shared.detail
+        guard detail != .off else {
+            if !entries.isEmpty { clear() }
+            return
+        }
+        var changed = false
+        for idx in entries.indices {
+            if let reduced = detail.storedURL(for: entries[idx].url), reduced != entries[idx].url {
+                entries[idx].url = reduced
+                changed = true
+            }
+            if let rewritten = entries[idx].rewritten,
+               let reduced = detail.storedURL(for: rewritten), reduced != rewritten {
+                entries[idx].rewritten = reduced
+                changed = true
+            }
+        }
+        if changed { persist() }
     }
 
     /// Drop entries older than `maxAge`, then keep only the most recent
@@ -164,7 +196,9 @@ final class URLLog: ObservableObject {
     /// Called only when the rewriter actually changed the URL.
     func updateRewritten(for id: UUID, to rewritten: URL, strippedParams: [String] = []) {
         guard let idx = entries.firstIndex(where: { $0.id == id }) else { return }
-        entries[idx].rewritten = SensitiveURLRedactor.redact(rewritten)
+        // Same detail reduction as the original URL. (The entry only exists
+        // when detail != .off, so `storedURL` is non-nil here.)
+        entries[idx].rewritten = ActivityLogSettings.shared.detail.storedURL(for: rewritten)
         entries[idx].strippedParams = strippedParams
         persist()
     }

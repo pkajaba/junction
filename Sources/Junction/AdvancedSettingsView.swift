@@ -137,26 +137,56 @@ struct AdvancedSettingsView: View {
     // MARK: - Activity log card
 
     private var activityLogCard: some View {
-        HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Activity log retention")
-                    .font(.system(size: 13, weight: .medium))
-                Text("How long the Activity tab keeps entries. Secret URL params "
-                     + "(passwords, tokens, sign-in codes) are always redacted before "
-                     + "anything is logged or exported.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer()
-            Picker("", selection: $activityLog.retention) {
-                ForEach(ActivityLogSettings.Retention.allCases) { option in
-                    Text(option.label).tag(option)
+        VStack(alignment: .leading, spacing: 12) {
+            // Detail row — how much of each URL is stored.
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Activity log")
+                        .font(.system(size: 13, weight: .medium))
+                    Text(activityLog.detail.caption)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                Spacer()
+                Picker("", selection: $activityLog.detail) {
+                    ForEach(ActivityLogSettings.LogDetail.allCases) { option in
+                        Text(option.label).tag(option)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .fixedSize()
+                .accessibilityLabel("Activity log detail")
             }
-            .labelsHidden()
-            .pickerStyle(.segmented)
-            .fixedSize()
+
+            Divider()
+
+            // Retention row — how long entries are kept. Moot (and dimmed)
+            // when logging is off.
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Keep entries for")
+                        .font(.system(size: 13, weight: .medium))
+                    Text("Older entries are dropped automatically. Secret params "
+                         + "(passwords, tokens, sign-in codes) are always redacted.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Picker("", selection: $activityLog.retention) {
+                    ForEach(ActivityLogSettings.Retention.allCases) { option in
+                        Text(option.label).tag(option)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .fixedSize()
+                .accessibilityLabel("Activity log retention")
+            }
+            .opacity(activityLog.detail == .off ? 0.4 : 1)
+            .disabled(activityLog.detail == .off)
         }
         .padding(14)
         .background(
