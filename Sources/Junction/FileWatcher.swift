@@ -28,6 +28,13 @@ final class FileWatcher {
         let parentPath = watchedURL.deletingLastPathComponent().path
         let paths: CFArray = [parentPath] as CFArray
 
+        // `passUnretained`, deliberately: the stream is owned by *this*
+        // object, so retaining self in the stream's context (passRetained)
+        // would form a cycle — the stream would keep the watcher alive,
+        // `deinit` would never fire, and `stop()` would never run. Instead
+        // the owner keeps us alive and `stop()` drains in-flight callbacks
+        // on teardown (see below), which closes the use-after-free window
+        // without the cycle.
         var context = FSEventStreamContext(
             version: 0,
             info: Unmanaged.passUnretained(self).toOpaque(),
@@ -61,9 +68,20 @@ final class FileWatcher {
     func stop() {
         guard let stream = stream else { return }
         FSEventStreamStop(stream)
-        FSEventStreamInvalidate(stream)
+        FSEventStreamInvalidate(stream)   // unschedules from `queue`: no new callbacks
         FSEventStreamRelease(stream)
         self.stream = nil
+        // Drain the serial callback queue so any callback already in flight
+        // finishes touching `self` before stop() returns. Combined with the
+        // unscheduling above, this guarantees no callback runs after the
+        // watcher is gone — the use-after-free window the audit flagged,
+        // which matters if this watcher is ever owned by a short-lived
+        // object rather than the app-lifetime RuleStore singleton.
+        //
+        // Safe from deadlock: the callback only hops to the main queue and
+        // never calls back into stop(), and stop() is never invoked from
+        // `queue` itself.
+        queue.sync { }
     }
 
     private func dispatchChange() {

@@ -63,4 +63,24 @@ final class SafeRegexTests: XCTestCase {
         XCTAssertFalse(result)
         XCTAssertLessThan(elapsed, 2.0, "catastrophic match should bail at the budget, not hang")
     }
+
+    /// Once a pattern has blown the budget, later calls are short-circuited
+    /// to `false` without re-running it — so repeated routing against a
+    /// catastrophic rule stays cheap (no per-click stall). Use a unique
+    /// pattern so the process-wide slow-cache isn't pre-populated by the
+    /// test above.
+    func test_matches_catastrophicPattern_isCachedAfterFirstOverrun() {
+        let evil = "^(b+)+$"
+        let input = String(repeating: "b", count: 32) + "c"
+        // First call pays the (now ~25 ms) budget and records the pattern.
+        XCTAssertFalse(SafeRegex.matches(pattern: evil, input: input))
+        // Many subsequent calls must stay well under one budget each —
+        // i.e. they short-circuit rather than re-running the match.
+        let start = Date()
+        for _ in 0..<50 {
+            XCTAssertFalse(SafeRegex.matches(pattern: evil, input: input))
+        }
+        let elapsed = Date().timeIntervalSince(start)
+        XCTAssertLessThan(elapsed, 0.2, "cached slow pattern should not re-run the match")
+    }
 }
